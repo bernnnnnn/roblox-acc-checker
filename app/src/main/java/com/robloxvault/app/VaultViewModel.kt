@@ -57,6 +57,19 @@ class VaultViewModel(app: Application) : AndroidViewModel(app) {
         persist()
     }
 
+    fun updateNote(id: String, note: String) = update(id) { it.copy(note = note.trim()) }
+
+    /** Manual status the user sets by tapping the chip: Unchecked → Working → Locked → Dead. */
+    fun cycleStatus(id: String) = update(id) {
+        val next = when (it.status) {
+            CheckStatus.UNKNOWN -> CheckStatus.VALID
+            CheckStatus.VALID -> CheckStatus.NEEDS_VERIFICATION
+            CheckStatus.NEEDS_VERIFICATION -> CheckStatus.INVALID
+            else -> CheckStatus.UNKNOWN
+        }
+        it.copy(status = next)
+    }
+
     /** Records the outcome of a login check, storing the session + screenshot on success. */
     fun recordCheck(id: String, status: CheckStatus, cookie: String, shotPath: String) {
         update(id) {
