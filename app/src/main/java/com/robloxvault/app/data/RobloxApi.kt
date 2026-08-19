@@ -16,6 +16,7 @@ object RobloxApi {
 
     data class Info(
         val userId: Long,
+        val username: String,
         val displayName: String,
         val createdIso: String,
         val robux: Long,
@@ -53,6 +54,7 @@ object RobloxApi {
     suspend fun fetchInfo(roblosecurity: String): Info = withContext(Dispatchers.IO) {
         val authed = JSONObject(get("https://users.roblox.com/v1/users/authenticated", roblosecurity))
         val userId = authed.getLong("id")
+        val username = authed.optString("name")
 
         val detail = JSONObject(get("https://users.roblox.com/v1/users/$userId", roblosecurity))
         val displayName = detail.optString("displayName", authed.optString("displayName"))
@@ -80,7 +82,7 @@ object RobloxApi {
 
         val rap = runCatching { fetchRap(userId, roblosecurity) }.getOrDefault(-1L)
 
-        Info(userId, displayName, createdIso, robux, rap, premium, friends, followers)
+        Info(userId, username, displayName, createdIso, robux, rap, premium, friends, followers)
     }
 
     /** Sums recent-average-price across the account's collectibles (capped). */

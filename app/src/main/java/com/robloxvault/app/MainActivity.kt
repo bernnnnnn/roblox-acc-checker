@@ -97,11 +97,14 @@ class MainActivity : FragmentActivity() {
                                 onImport = { text -> vm.importCombos(text) },
                                 onAdd = { u, p, n -> vm.addAccount(u, p, n) },
                                 onDelete = vm::delete,
-                                onLogin = { acc -> startLogin(acc) { i -> loginLauncher.launch(i) } },
+                                onLogin = { acc -> startLogin(acc, LoginActivity.MODE_CHECK) { i -> loginLauncher.launch(i) } },
+                                onOpen = { acc -> startLogin(acc, LoginActivity.MODE_OPEN) { i -> loginLauncher.launch(i) } },
                                 onOpenRoblox = { openRobloxApp() },
                                 onCopy = { value, label -> copyToClipboard(value, label) },
                                 onCycleStatus = { id -> vm.cycleStatus(id) },
                                 onLoadStats = { acc -> vm.refreshInfo(acc.id) },
+                                onCheckAll = { vm.checkAll() },
+                                checking = vm.refreshingAll,
                                 onShare = { acc ->
                                     shareInfo(
                                         vm.accountInfoText(acc),
@@ -118,12 +121,15 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    private fun startLogin(account: Account, launch: (Intent) -> Unit) {
+    private fun startLogin(account: Account, mode: String, launch: (Intent) -> Unit) {
         val intent = Intent(this, LoginActivity::class.java)
             .putExtra(LoginActivity.EXTRA_USERNAME, account.username)
             .putExtra(LoginActivity.EXTRA_PASSWORD, account.password)
-            .putExtra(LoginActivity.EXTRA_MODE, LoginActivity.MODE_CHECK)
+            .putExtra(LoginActivity.EXTRA_MODE, mode)
             .putExtra(LoginActivity.EXTRA_ACCOUNT_ID, account.id)
+        if (mode == LoginActivity.MODE_OPEN) {
+            intent.putExtra(LoginActivity.EXTRA_COOKIE, account.roblosecurity)
+        }
         launch(intent)
     }
 

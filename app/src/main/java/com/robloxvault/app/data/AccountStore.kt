@@ -88,22 +88,33 @@ class AccountStore(context: Context) {
         private const val KEY_ACCOUNTS = "accounts_json"
 
         /**
-         * Parses pasted text in `account:pass` format (one per line). The first
-         * colon splits user from password, so passwords may themselves contain
-         * colons. Blank lines and lines without a colon are ignored.
+         * Parses pasted accounts, one per line. Each line can be:
+         *  - a `.ROBLOSECURITY` cookie (starts with `_|WARNING` or contains
+         *    `.ROBLOSECURITY=`) → a cookie-only account (username filled on Check),
+         *  - `user:pass` → a password account (first colon splits user/pass),
+         *  - `user:pass:cookie` → both.
          */
         fun parseComboList(text: String): List<Account> =
-            text.lineSequence()
-                .map { it.trim() }
-                .filter { it.isNotEmpty() && it.contains(":") }
-                .map { line ->
-                    val idx = line.indexOf(':')
-                    Account(
-                        username = line.substring(0, idx).trim(),
-                        password = line.substring(idx + 1),
-                    )
+            text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.mapNotNull { line ->
+                when {
+                    // Pure cookie: the raw token, or a "...\.ROBLOSECURITY=<token>..." blob.
+                    line.startsWith("_|") ->
+                        Account(username = "", password = "", roblosecurity = line)
+                    line.contains(".ROBLOSECURITY=") -> {
+                        val ck = line.substringAfter(".ROBLOSECURITY=").substringBefore(";").trim()
+                        if (ck.length > 40) Account(username = "", password = "", roblosecurity = ck) else null
+                    }
+                    line.contains(":") -> {
+                        val user = line.substringBefore(":").trim()
+                        val rest = line.substringAfter(":")
+                        // Optional trailing cookie: user:pass:_|WARNING...
+                        val warn = rest.indexOf("_|WARNING")
+                        val pass = if (warn >= 0) rest.substring(0, warn).trimEnd(':', ' ') else rest
+                        val ck = if (warn >= 0) rest.substring(warn).trim() else ""
+                        if (user.isEmpty()) null else Account(username = user, password = pass, roblosecurity = ck)
+                    }
+                    else -> null
                 }
-                .filter { it.username.isNotEmpty() }
-                .toList()
+            }.toList()
     }
 }

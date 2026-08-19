@@ -76,11 +76,14 @@ fun MainScreen(
     onAdd: (String, String, String) -> Unit,
     onDelete: (String) -> Unit,
     onLogin: (Account) -> Unit,
+    onOpen: (Account) -> Unit,
     onOpenRoblox: () -> Unit,
     onCopy: (String, String) -> Unit,
     onCycleStatus: (String) -> Unit,
     onLoadStats: (Account) -> Unit,
     onShare: (Account) -> Unit,
+    onCheckAll: () -> Unit,
+    checking: Boolean,
     onEnableAutofill: () -> Unit,
     contentPadding: PaddingValues,
 ) {
@@ -99,6 +102,16 @@ fun MainScreen(
                 icon = Icons.Filled.Shield,
                 trailing = {
                     Row {
+                        Surface(color = NoctraAccent.copy(alpha = 0.16f), shape = CircleShape) {
+                            IconButton(onClick = onCheckAll, enabled = !checking) {
+                                if (checking) {
+                                    CircularProgressIndicator(color = NoctraAccent, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                                } else {
+                                    Icon(Icons.Filled.Refresh, contentDescription = "Check all", tint = NoctraAccent)
+                                }
+                            }
+                        }
+                        Spacer(Modifier.width(8.dp))
                         HeaderCircle(Icons.Filled.Password, "Enable autofill", onEnableAutofill)
                         Spacer(Modifier.width(8.dp))
                         HeaderCircle(Icons.Filled.Add, "Add", { showAdd = true })
@@ -129,6 +142,7 @@ fun MainScreen(
                     AccountCard(
                         account = account,
                         onLogin = { onLogin(account) },
+                        onOpen = { onOpen(account) },
                         onOpenRoblox = onOpenRoblox,
                         onCopy = onCopy,
                         onCycleStatus = { onCycleStatus(account.id) },
@@ -168,6 +182,7 @@ private fun HeaderCircle(icon: androidx.compose.ui.graphics.vector.ImageVector, 
 private fun AccountCard(
     account: Account,
     onLogin: () -> Unit,
+    onOpen: () -> Unit,
     onOpenRoblox: () -> Unit,
     onCopy: (String, String) -> Unit,
     onCycleStatus: () -> Unit,
@@ -176,6 +191,7 @@ private fun AccountCard(
     onDelete: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val name = account.username.ifBlank { if (account.userId > 0) "id ${account.userId}" else "cookie account" }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -185,12 +201,14 @@ private fun AccountCard(
     ) {
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Avatar(account.username)
+                Avatar(name)
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("@${account.username}", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = NoctraTextHi)
+                    Text("@$name", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = NoctraTextHi)
                     if (account.note.isNotBlank()) {
                         Text(account.note, fontSize = 12.sp, color = NoctraMuted)
+                    } else if (account.hasSession && account.username.isBlank()) {
+                        Text("cookie — tap Check for name", fontSize = 12.sp, color = NoctraMuted)
                     }
                 }
                 StatusChip(account.status, onCycleStatus)
@@ -198,10 +216,19 @@ private fun AccountCard(
 
             Spacer(Modifier.height(12.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                PrimaryChip(Icons.Filled.Login, "Login", onLogin)
-                PrimaryChip(Icons.Filled.SportsEsports, "Roblox app", onOpenRoblox)
-                GhostChip(Icons.Filled.ContentCopy, "User") { onCopy(account.username, "Username") }
-                GhostChip(Icons.Filled.ContentCopy, "Pass") { onCopy(account.password, "Password") }
+                if (account.hasSession) {
+                    PrimaryChip(Icons.Filled.Login, "Open", onOpen)
+                    GhostChip(Icons.Filled.Refresh, "Check") { onLoadStats() }
+                } else {
+                    PrimaryChip(Icons.Filled.Login, "Login", onLogin)
+                }
+                GhostChip(Icons.Filled.SportsEsports, "Roblox app", onOpenRoblox)
+                if (account.username.isNotBlank()) {
+                    GhostChip(Icons.Filled.ContentCopy, "User") { onCopy(account.username, "Username") }
+                }
+                if (account.password.isNotEmpty()) {
+                    GhostChip(Icons.Filled.ContentCopy, "Pass") { onCopy(account.password, "Password") }
+                }
                 GhostChip(Icons.Filled.ExpandMore, if (expanded) "Hide" else "Stats") { expanded = !expanded }
             }
 
@@ -337,11 +364,11 @@ private fun AddDialog(
         title = { Text("Add accounts") },
         text = {
             Column {
-                Text("Paste account:pass lines:", fontSize = 13.sp, color = NoctraMuted)
+                Text("Paste account:pass OR .ROBLOSECURITY cookies (one per line):", fontSize = 13.sp, color = NoctraMuted)
                 OutlinedTextField(
                     value = combo,
                     onValueChange = { combo = it; message = "" },
-                    placeholder = { Text("user1:pass1\nuser2:pass2") },
+                    placeholder = { Text("user:pass\n_|WARNING:-DO-NOT-SHARE…") },
                     modifier = Modifier.fillMaxWidth().height(110.dp).padding(top = 6.dp),
                 )
                 Spacer(Modifier.height(10.dp))

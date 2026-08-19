@@ -37,11 +37,17 @@ class VaultViewModel(app: Application) : AndroidViewModel(app) {
         else accounts.filter { it.username.lowercase().contains(q) || it.note.lowercase().contains(q) }
     }
 
-    /** Import combos, skipping usernames already present (case-insensitive). */
+    /** Import accounts (user:pass and/or cookies), skipping duplicates. */
     fun importCombos(text: String): Int {
-        val existing = accounts.map { it.username.lowercase() }.toHashSet()
-        val parsed = AccountStore.parseComboList(text)
-            .filter { existing.add(it.username.lowercase()) }
+        val users = accounts.filter { it.username.isNotBlank() }.map { it.username.lowercase() }.toHashSet()
+        val cookies = accounts.filter { it.roblosecurity.isNotBlank() }.map { it.roblosecurity }.toHashSet()
+        val parsed = AccountStore.parseComboList(text).filter { acc ->
+            when {
+                acc.username.isNotBlank() -> users.add(acc.username.lowercase())
+                acc.roblosecurity.isNotBlank() -> cookies.add(acc.roblosecurity)
+                else -> false
+            }
+        }
         accounts.addAll(parsed)
         persist()
         return parsed.size
@@ -84,67 +90,61 @@ class VaultViewModel(app: Application) : AndroidViewModel(app) {
         if (status == CheckStatus.VALID && cookie.isNotBlank()) refreshInfo(id)
     }
 
+    /** Checks one account via its cookie: validates + pulls info, updates status. */
     fun refreshInfo(id: String) {
         val account = accounts.firstOrNull { it.id == id } ?: return
         if (!account.hasSession) {
-            update(id) { it.copy(infoError = "Not logged in — tap Check first") }
+            update(id) { it.copy(infoError = "No session — log in once or import a cookie") }
             return
         }
-        viewModelScope.launch {
-            runCatching { RobloxApi.fetchInfo(account.roblosecurity) }
-                .onSuccess { info ->
-                    update(id) {
-                        it.copy(
-                            userId = info.userId,
-                            displayName = info.displayName,
-                            createdIso = info.createdIso,
-                            robux = info.robux,
-                            rap = info.rap,
-                            premium = info.premium,
-                            friends = info.friends,
-                            followers = info.followers,
-                            infoUpdatedEpoch = System.currentTimeMillis(),
-                            infoError = "",
-                        )
-                    }
-                }
-                .onFailure { e ->
-                    update(id) { it.copy(infoError = e.message ?: "Failed to load info") }
-                }
-        }
+        viewModelScope.launch { checkOne(account) }
     }
 
-    fun refreshAllInfo() {
+    /** Reliable batch check: validates every cookie account and loads its info. */
+    fun checkAll() {
         viewModelScope.launch {
             refreshingAll = true
             for (account in accounts.toList()) {
                 if (!account.hasSession) {
-                    update(account.id) { it.copy(infoError = "Not logged in — tap Check first") }
+                    update(account.id) { it.copy(infoError = "No session — log in or import a cookie") }
                     continue
                 }
-                runCatching { RobloxApi.fetchInfo(account.roblosecurity) }
-                    .onSuccess { info ->
-                        update(account.id) {
-                            it.copy(
-                                userId = info.userId,
-                                displayName = info.displayName,
-                                createdIso = info.createdIso,
-                                robux = info.robux,
-                                rap = info.rap,
-                                premium = info.premium,
-                                friends = info.friends,
-                                followers = info.followers,
-                                infoUpdatedEpoch = System.currentTimeMillis(),
-                                infoError = "",
-                            )
-                        }
-                    }
-                    .onFailure { e ->
-                        update(account.id) { it.copy(infoError = e.message ?: "Failed to load info") }
-                    }
+                checkOne(accounts.firstOrNull { it.id == account.id } ?: account)
             }
             refreshingAll = false
         }
+    }
+
+    private suspend fun checkOne(account: Account) {
+        runCatching { RobloxApi.fetchInfo(account.roblosecurity) }
+            .onSuccess { info -> applyInfo(account.id, info) }
+            .onFailure { e ->
+                update(account.id) {
+                    it.copy(
+                        status = CheckStatus.INVALID,
+                        infoError = e.message ?: "Dead / expired session",
+                        lastCheckedEpoch = System.currentTimeMillis(),
+                    )
+                }
+            }
+    }
+
+    private fun applyInfo(id: String, info: RobloxApi.Info) = update(id) {
+        it.copy(
+            username = if (it.username.isBlank() && info.username.isNotBlank()) info.username else it.username,
+            userId = info.userId,
+            displayName = info.displayName,
+            createdIso = info.createdIso,
+            robux = info.robux,
+            rap = info.rap,
+            premium = info.premium,
+            friends = info.friends,
+            followers = info.followers,
+            status = CheckStatus.VALID,
+            infoUpdatedEpoch = System.currentTimeMillis(),
+            lastCheckedEpoch = System.currentTimeMillis(),
+            infoError = "",
+        )
     }
 
     // --- copy-text formatting ------------------------------------------------
