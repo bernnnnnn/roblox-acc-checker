@@ -22,7 +22,9 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import com.robloxvault.app.R
+import com.robloxvault.app.data.RobloxApi
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -53,18 +55,20 @@ class LoginActivity : Activity() {
     private var revealed = false
     private var submitted = false
     private var loggedInHandled = false
+    private var verifying = false
     private var attemptStart = 0L
 
     private val poll = object : Runnable {
         override fun run() {
             if (resolved) return
-            if (isLoggedIn()) {
-                onLoggedIn()
-                return
+            // A cookie alone isn't enough — a locked/"confirm you're a human"
+            // session also has one. Verify against the API before proceeding.
+            if (isLoggedIn() && !loggedInHandled && !verifying) {
+                attemptVerify(manual = false)
             }
             if (!revealed) {
                 val elapsed = System.currentTimeMillis() - attemptStart
-                if (submitted) detectCaptcha()
+                if (submitted) detectPageState()
                 if (elapsed > REVEAL_TIMEOUT_MS) {
                     reveal("Finish logging in (or solve the captcha)")
                 }
@@ -97,7 +101,10 @@ class LoginActivity : Activity() {
                 override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest) = false
                 override fun onPageFinished(view: WebView, url: String?) {
                     if (resolved) return
-                    if (isLoggedIn() && mode == MODE_CHECK) { onLoggedIn(); return }
+                    if (mode == MODE_CHECK && isLoggedIn() && !loggedInHandled && !verifying) {
+                        attemptVerify(manual = false)
+                        return
+                    }
                     if (mode == MODE_CHECK && !submitted && url != null && url.contains("/login")) {
                         prefillAndSubmit()
                     }
@@ -119,7 +126,7 @@ class LoginActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(0, 1, 1f)
         }
         invalidButton = barButton("Didn't work") { finishWith(RESULT_INVALID, null) }.apply { visibility = View.GONE }
-        solveButton = barButton("Logged in") { onLoggedIn() }.apply { visibility = View.GONE }
+        solveButton = barButton("Done") { attemptVerify(manual = true) }.apply { visibility = View.GONE }
         topBar.addView(spacer)
         topBar.addView(solveButton)
         topBar.addView(invalidButton)
@@ -147,10 +154,14 @@ class LoginActivity : Activity() {
             return
         }
 
-        // CHECK mode: fully wipe cookies (await callback) so each account is isolated.
+        // CHECK mode: clear only the session cookie (not the whole jar) so each
+        // account logs into its own fresh session, while the browser-trust
+        // cookies persist — a "known device" gets flagged/locked far less often.
         statusView.text = "Checking @$username…"
         attemptStart = System.currentTimeMillis()
-        cm.removeAllCookies {
+        val expire = "=; Max-Age=0; Path=/; Domain=.roblox.com"
+        cm.setCookie("https://www.roblox.com", ".ROBLOSECURITY$expire")
+        cm.setCookie("https://roblox.com", ".ROBLOSECURITY$expire") {
             cm.flush()
             attemptStart = System.currentTimeMillis()
             webView.loadUrl("https://www.roblox.com/login")
@@ -234,19 +245,49 @@ class LoginActivity : Activity() {
         webView.evaluateJavascript(js) { }
     }
 
-    /** Reveals the web page if a captcha widget is detected. */
-    private fun detectCaptcha() {
+    /** Reveals the web page if a captcha OR an account-lock / human-check page is shown. */
+    private fun detectPageState() {
         val js = """
             (function(){
-              var el = document.querySelector('iframe[src*="arkose"], iframe[src*="funcaptcha"], iframe[title*="verification" i], #FunCAPTCHA, [data-testid*="captcha" i]');
-              return el ? 'captcha' : 'none';
+              var t = document.body ? document.body.innerText : '';
+              if (/suspicious activity|Account locked|confirming that you'?re a human|Verify you are human|Start Puzzle/i.test(t)) return 'challenge';
+              if (document.querySelector('iframe[src*="arkose"], iframe[src*="funcaptcha"], iframe[title*="verification" i], #FunCAPTCHA, [data-testid*="captcha" i]')) return 'challenge';
+              return 'none';
             })();
         """.trimIndent()
         webView.evaluateJavascript(js) { r ->
-            if (!revealed && r != null && r.contains("captcha")) {
-                reveal("Solve the captcha — it continues automatically")
+            if (!revealed && r != null && r.contains("challenge")) {
+                reveal("Tap Continue / solve the check — it finishes automatically")
             }
         }
+    }
+
+    /**
+     * Verifies the current cookie is a real, unlocked session before treating it
+     * as a successful login. Runs off the main thread.
+     */
+    private fun attemptVerify(manual: Boolean) {
+        val cookie = roblosecurity()
+        if (cookie == null) {
+            if (manual) Toast.makeText(this, "Not logged in yet", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (verifying || loggedInHandled) return
+        verifying = true
+        Thread {
+            val ok = RobloxApi.isValidSession(cookie)
+            runOnUiThread {
+                verifying = false
+                if (resolved) return@runOnUiThread
+                if (ok) {
+                    onLoggedIn()
+                } else if (!revealed) {
+                    reveal("Tap Continue / confirm you're human to finish")
+                } else if (manual) {
+                    Toast.makeText(this, "Still locked — finish the verification on the page", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.start()
     }
 
     /** Detected a valid session: load the home page (behind the splash) and capture it. */

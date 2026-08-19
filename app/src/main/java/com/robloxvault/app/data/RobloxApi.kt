@@ -28,6 +28,28 @@ object RobloxApi {
     /** Thrown when the stored session is no longer valid. */
     class SessionExpired : Exception("Session expired — tap Check to log in again")
 
+    /**
+     * Blocking check (call off the main thread) that returns true only if the
+     * cookie is a fully valid, unlocked session — i.e. the authenticated
+     * endpoint returns 200. A locked / "confirm you're a human" session returns
+     * 401/403 and therefore false.
+     */
+    fun isValidSession(roblosecurity: String): Boolean = try {
+        val conn = (URL("https://users.roblox.com/v1/users/authenticated").openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 12000
+            readTimeout = 12000
+            instanceFollowRedirects = false
+            setRequestProperty("Cookie", ".ROBLOSECURITY=$roblosecurity")
+            setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile")
+        }
+        val code = conn.responseCode
+        conn.disconnect()
+        code == 200
+    } catch (e: Exception) {
+        false
+    }
+
     suspend fun fetchInfo(roblosecurity: String): Info = withContext(Dispatchers.IO) {
         val authed = JSONObject(get("https://users.roblox.com/v1/users/authenticated", roblosecurity))
         val userId = authed.getLong("id")
