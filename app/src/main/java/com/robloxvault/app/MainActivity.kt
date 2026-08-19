@@ -13,6 +13,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.Shield
@@ -23,6 +27,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -52,7 +60,16 @@ class MainActivity : FragmentActivity() {
 
         setContent {
             RobloxVaultTheme {
-                Surface {
+                Box(Modifier.fillMaxSize().background(Color.Black)) {
+                    Image(
+                        painter = painterResource(R.drawable.app_bg),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        alpha = 0.42f,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    Box(Modifier.fillMaxSize().background(Color(0xB3000000)))
+                    Surface(color = Color.Transparent, contentColor = com.robloxvault.app.ui.NoctraText) {
                     val vm: VaultViewModel = viewModel()
 
                     // Cached once — reading EncryptedSharedPreferences on every
@@ -111,8 +128,9 @@ class MainActivity : FragmentActivity() {
                         )
                     } else {
                         Scaffold(
+                            containerColor = Color.Transparent,
                             bottomBar = {
-                                NavigationBar {
+                                NavigationBar(containerColor = com.robloxvault.app.ui.NoctraSurface.copy(alpha = 0.92f)) {
                                     NavigationBarItem(
                                         selected = tab == 0,
                                         onClick = { tab = 0 },
@@ -158,6 +176,7 @@ class MainActivity : FragmentActivity() {
                             }
                         }
                     }
+                    }
                 }
             }
         }
@@ -169,6 +188,9 @@ class MainActivity : FragmentActivity() {
             .putExtra(LoginActivity.EXTRA_PASSWORD, account.password)
             .putExtra(LoginActivity.EXTRA_MODE, mode)
             .putExtra(LoginActivity.EXTRA_ACCOUNT_ID, account.id)
+        if (mode == LoginActivity.MODE_OPEN) {
+            intent.putExtra(LoginActivity.EXTRA_COOKIE, account.roblosecurity)
+        }
         launch(intent)
     }
 
