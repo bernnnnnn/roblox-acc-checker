@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -161,6 +162,8 @@ class MainActivity : FragmentActivity() {
                                         val ids = vm.visibleAccounts().map { it.id }
                                         if (ids.isNotEmpty()) { autoIndex = 0; autoQueue = ids }
                                     },
+                                    onEnableAutofill = { enableAutofill() },
+                                    onOpenRoblox = { openRobloxApp() },
                                     contentPadding = innerPadding,
                                 )
                                 else -> InfoScreen(
@@ -192,6 +195,32 @@ class MainActivity : FragmentActivity() {
             intent.putExtra(LoginActivity.EXTRA_COOKIE, account.roblosecurity)
         }
         launch(intent)
+    }
+
+    /** Opens system settings to set this app as the autofill provider. */
+    private fun enableAutofill() {
+        try {
+            startActivity(
+                Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE)
+                    .setData(Uri.parse("package:$packageName")),
+            )
+        } catch (e: Exception) {
+            Toast.makeText(this, "Open Settings → Passwords, passkeys & autofill → pick Roblox Vault", Toast.LENGTH_LONG).show()
+            runCatching { startActivity(Intent(Settings.ACTION_SETTINGS)) }
+        }
+    }
+
+    /** Launches the installed Roblox app (or its Play Store page). */
+    private fun openRobloxApp() {
+        val launch = packageManager.getLaunchIntentForPackage("com.roblox.client")
+        if (launch != null) {
+            startActivity(launch)
+        } else {
+            Toast.makeText(this, "Roblox app not installed", Toast.LENGTH_SHORT).show()
+            runCatching {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=com.roblox.client")))
+            }
+        }
     }
 
     private fun copyToClipboard(value: String, label: String) {

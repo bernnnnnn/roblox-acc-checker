@@ -39,6 +39,16 @@
             android:exported="false"
             android:theme="@style/Theme.RobloxVault" />
 
+        <service
+            android:name=".autofill.VaultAutofillService"
+            android:exported="true"
+            android:label="Roblox Vault"
+            android:permission="android.permission.BIND_AUTOFILL_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.autofill.AutofillService" />
+            </intent-filter>
+        </service>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

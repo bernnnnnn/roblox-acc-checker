@@ -21,8 +21,11 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Login
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Password
 import androidx.compose.material.icons.filled.PlaylistAddCheck
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -61,6 +64,8 @@ fun VaultScreen(
     onOpen: (Account) -> Unit,
     onCopy: (String, String) -> Unit,
     onAutoCheck: () -> Unit,
+    onEnableAutofill: () -> Unit,
+    onOpenRoblox: () -> Unit,
     contentPadding: PaddingValues,
 ) {
     var showAdd by remember { mutableStateOf(false) }
@@ -78,17 +83,11 @@ fun VaultScreen(
                 icon = Icons.Filled.Shield,
                 trailing = {
                     Row {
-                        Surface(color = NoctraAccent.copy(alpha = 0.16f), shape = CircleShape) {
-                            IconButton(onClick = onAutoCheck) {
-                                Icon(Icons.Filled.PlaylistAddCheck, contentDescription = "Auto-check all", tint = NoctraAccent)
-                            }
-                        }
+                        HeaderCircle(Icons.Filled.Password, "Enable autofill", onEnableAutofill)
                         Spacer(Modifier.width(8.dp))
-                        Surface(color = NoctraAccent.copy(alpha = 0.16f), shape = CircleShape) {
-                            IconButton(onClick = { showAdd = true }) {
-                                Icon(Icons.Filled.Add, contentDescription = "Add", tint = NoctraAccent)
-                            }
-                        }
+                        HeaderCircle(Icons.Filled.PlaylistAddCheck, "Auto-check all", onAutoCheck)
+                        Spacer(Modifier.width(8.dp))
+                        HeaderCircle(Icons.Filled.Add, "Add", { showAdd = true })
                     }
                 },
             )
@@ -124,6 +123,7 @@ fun VaultScreen(
                         onOpen = { onOpen(account) },
                         onCopyUser = { onCopy(account.username, "Username") },
                         onCopyPass = { onCopy(account.password, "Password") },
+                        onOpenRoblox = onOpenRoblox,
                         onDelete = { confirmDelete = account },
                     )
                 }
@@ -161,6 +161,7 @@ private fun AccountCard(
     onOpen: () -> Unit,
     onCopyUser: () -> Unit,
     onCopyPass: () -> Unit,
+    onOpenRoblox: () -> Unit,
     onDelete: () -> Unit,
 ) {
     Card(
@@ -208,6 +209,11 @@ private fun AccountCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SmallCopy("User", onCopyUser)
                 SmallCopy("Pass", onCopyPass)
+                TextButton(onClick = onOpenRoblox, contentPadding = PaddingValues(horizontal = 8.dp)) {
+                    Icon(Icons.Filled.SportsEsports, contentDescription = null, modifier = Modifier.width(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Roblox", fontSize = 12.sp)
+                }
                 Spacer(Modifier.weight(1f))
                 IconButton(onClick = onDelete) {
                     Icon(
@@ -247,6 +253,15 @@ private fun StatusChip(status: CheckStatus) {
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
         )
+    }
+}
+
+@Composable
+private fun HeaderCircle(icon: ImageVector, desc: String, onClick: () -> Unit) {
+    Surface(color = NoctraAccent.copy(alpha = 0.16f), shape = CircleShape) {
+        IconButton(onClick = onClick) {
+            Icon(icon, contentDescription = desc, tint = NoctraAccent)
+        }
     }
 }
 
