@@ -23,7 +23,6 @@ import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import com.robloxvault.app.R
@@ -33,19 +32,19 @@ import java.io.File
 import java.io.FileOutputStream
 
 /**
- * Logs into one of the user's own accounts on Roblox's REAL login page, but
- * keeps the web page hidden behind a themed splash. It auto-fills and submits
- * the form; the web page is only revealed if a CAPTCHA / 2FA / error actually
- * needs the user. After login it loads the account's home page (still behind the
- * splash) and captures that as the screenshot. No bypassing, no bulk, no proxies.
+ * Opens Roblox's REAL login page, visible, with the username/password
+ * pre-filled. The USER taps Log In themselves and completes any CAPTCHA / 2FA /
+ * unlock — this behaves like a normal person logging in, which avoids the
+ * automated-login lockouts. Once a genuinely valid (unlocked) session is
+ * detected, it captures the home page as a screenshot and stores the session.
+ * No auto-submitting, no bypassing of any verification.
  */
 class LoginActivity : Activity() {
 
     private lateinit var webView: WebView
     private lateinit var splash: View
+    private lateinit var splashText: TextView
     private lateinit var statusView: TextView
-    private lateinit var solveButton: Button
-    private lateinit var invalidButton: Button
     private val handler = Handler(Looper.getMainLooper())
 
     private var username = ""
@@ -55,26 +54,15 @@ class LoginActivity : Activity() {
     private var startCookie = ""
 
     private var resolved = false
-    private var revealed = false
-    private var submitted = false
-    private var loggedInHandled = false
+    private var prefilled = false
     private var verifying = false
-    private var attemptStart = 0L
+    private var loggedInHandled = false
 
     private val poll = object : Runnable {
         override fun run() {
             if (resolved) return
-            // A cookie alone isn't enough — a locked/"confirm you're a human"
-            // session also has one. Verify against the API before proceeding.
-            if (isLoggedIn() && !loggedInHandled && !verifying) {
+            if (mode == MODE_CHECK && isLoggedIn() && !loggedInHandled && !verifying) {
                 attemptVerify(manual = false)
-            }
-            if (!revealed) {
-                val elapsed = System.currentTimeMillis() - attemptStart
-                if (submitted) detectPageState()
-                if (elapsed > REVEAL_TIMEOUT_MS) {
-                    reveal("Finish logging in (or solve the captcha)")
-                }
             }
             handler.postDelayed(this, 1000)
         }
@@ -92,9 +80,16 @@ class LoginActivity : Activity() {
 
         val root = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#000000")) }
 
-        webView = WebView(this).apply {
+        val column = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             layoutParams = FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
+            )
+        }
+
+        webView = WebView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f,
             )
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
@@ -104,8 +99,6 @@ class LoginActivity : Activity() {
                 override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest): Boolean {
                     val url = r.url.toString()
                     if (url.startsWith("http://") || url.startsWith("https://")) return false
-                    // Non-web scheme (intent://, roblox://, market://…) — e.g. the
-                    // account-unlock / liveness deep link into the Roblox app.
                     return openExternal(url)
                 }
                 override fun onPageFinished(view: WebView, url: String?) {
@@ -114,36 +107,40 @@ class LoginActivity : Activity() {
                         attemptVerify(manual = false)
                         return
                     }
-                    if (mode == MODE_CHECK && !submitted && url != null && url.contains("/login")) {
-                        prefillAndSubmit()
+                    if (mode == MODE_CHECK && !prefilled && url != null && url.contains("/login")) {
+                        prefill()
                     }
                 }
             }
         }
 
-        splash = buildSplash()
-
-        val topBar = LinearLayout(this).apply {
+        val bar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(10), dp(8), dp(10), dp(8))
-            layoutParams = FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
-            )
+            setBackgroundColor(Color.parseColor("#0E0F12"))
+            setPadding(dp(12), dp(6), dp(8), dp(6))
         }
-        val spacer = View(this).apply {
-            layoutParams = LinearLayout.LayoutParams(0, 1, 1f)
+        statusView = TextView(this).apply {
+            text = if (mode == MODE_OPEN) "@$username" else "Tap Log In to finish"
+            setTextColor(Color.parseColor("#C7D2DE"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         }
-        invalidButton = barButton("Didn't work") { finishWith(RESULT_INVALID, null) }.apply { visibility = View.GONE }
-        solveButton = barButton("Done") { attemptVerify(manual = true) }.apply { visibility = View.GONE }
-        topBar.addView(spacer)
-        topBar.addView(solveButton)
-        topBar.addView(invalidButton)
-        topBar.addView(barButton("Cancel") { finishWith(RESULT_CANCELLED, null) })
+        bar.addView(statusView)
+        if (mode == MODE_CHECK) {
+            bar.addView(barButton("Done") { attemptVerify(manual = true) })
+            bar.addView(barButton("Didn't work") { finishWith(RESULT_INVALID, null) })
+        }
+        bar.addView(barButton("Close") { finishWith(RESULT_CANCELLED, null) })
 
-        root.addView(webView)
+        column.addView(webView)
+        column.addView(bar)
+
+        splash = buildSplash()
+        splash.visibility = View.GONE
+
+        root.addView(column)
         root.addView(splash)
-        root.addView(topBar)
         setContentView(root)
 
         val cm = CookieManager.getInstance()
@@ -151,8 +148,6 @@ class LoginActivity : Activity() {
         cm.setAcceptThirdPartyCookies(webView, true)
 
         if (mode == MODE_OPEN) {
-            revealWeb()
-            statusView.text = "@$username"
             if (startCookie.isNotBlank()) {
                 cm.setCookie("https://www.roblox.com", roblosecurityCookie(startCookie)) {
                     webView.loadUrl("https://www.roblox.com/home")
@@ -163,16 +158,12 @@ class LoginActivity : Activity() {
             return
         }
 
-        // CHECK mode: clear only the session cookie (not the whole jar) so each
-        // account logs into its own fresh session, while the browser-trust
-        // cookies persist — a "known device" gets flagged/locked far less often.
-        statusView.text = "Checking @$username…"
-        attemptStart = System.currentTimeMillis()
+        // CHECK: clear only the session cookie (keep browser-trust cookies so the
+        // device stays "known"), then show the login page for the user to log in.
         val expire = "=; Max-Age=0; Path=/; Domain=.roblox.com"
         cm.setCookie("https://www.roblox.com", ".ROBLOSECURITY$expire")
         cm.setCookie("https://roblox.com", ".ROBLOSECURITY$expire") {
             cm.flush()
-            attemptStart = System.currentTimeMillis()
             webView.loadUrl("https://www.roblox.com/login")
         }
         handler.postDelayed(poll, 1500)
@@ -184,6 +175,7 @@ class LoginActivity : Activity() {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
             )
             setBackgroundColor(Color.parseColor("#000000"))
+            isClickable = true
         }
         val bg = ImageView(this).apply {
             layoutParams = FrameLayout.LayoutParams(
@@ -197,7 +189,7 @@ class LoginActivity : Activity() {
             layoutParams = FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
             )
-            setBackgroundColor(Color.parseColor("#AA000000"))
+            setBackgroundColor(Color.parseColor("#B3000000"))
         }
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -206,24 +198,24 @@ class LoginActivity : Activity() {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
             )
         }
-        column.addView(ProgressBar(this))
-        statusView = TextView(this).apply {
-            text = "Checking…"
+        column.addView(android.widget.ProgressBar(this))
+        splashText = TextView(this).apply {
+            text = "Saving…"
             setTextColor(Color.parseColor("#F4F6F8"))
             setPadding(dp(24), dp(16), dp(24), 0)
             gravity = Gravity.CENTER
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
         }
-        column.addView(statusView)
+        column.addView(splashText)
         frame.addView(bg)
         frame.addView(scrim)
         frame.addView(column)
         return frame
     }
 
-    private fun prefillAndSubmit() {
-        submitted = true
-        attemptStart = System.currentTimeMillis()
+    /** Pre-fills the fields only — the user taps Log In themselves. */
+    private fun prefill() {
+        prefilled = true
         val u = JSONObject.quote(username)
         val p = JSONObject.quote(password)
         val js = """
@@ -243,63 +235,38 @@ class LoginActivity : Activity() {
               var pass = document.getElementById('login-password')
                 || document.querySelector('input[name="password"]')
                 || document.querySelector('input[type="password"]');
-              if (!setVal(user, $u) || !setVal(pass, $p)) return 'nofields';
-              var btn = document.getElementById('login-button')
-                || document.querySelector('button[type="submit"]')
-                || document.querySelector('form button');
-              if (btn) { setTimeout(function(){ btn.click(); }, 250); return 'submitted'; }
-              return 'nobutton';
-            })();
-        """.trimIndent()
-        webView.evaluateJavascript(js) { }
-    }
-
-    /** Reveals the web page if a captcha OR an account-lock / human-check page is shown. */
-    private fun detectPageState() {
-        val js = """
-            (function(){
-              var t = document.body ? document.body.innerText : '';
-              if (/suspicious activity|Account locked|confirming that you'?re a human|Verify you are human|Start Puzzle/i.test(t)) return 'challenge';
-              if (document.querySelector('iframe[src*="arkose"], iframe[src*="funcaptcha"], iframe[title*="verification" i], #FunCAPTCHA, [data-testid*="captcha" i]')) return 'challenge';
-              return 'none';
+              return (setVal(user, $u) && setVal(pass, $p)) ? 'filled' : 'nofields';
             })();
         """.trimIndent()
         webView.evaluateJavascript(js) { r ->
-            if (!revealed && r != null && r.contains("challenge")) {
-                reveal("Tap Continue / solve the check — it finishes automatically")
-            }
+            statusView.text = if (r != null && r.contains("filled"))
+                "Filled — tap Log In"
+            else
+                "Log in with your details"
         }
     }
 
-    /**
-     * Verifies the current cookie is a real, unlocked session before treating it
-     * as a successful login. Runs off the main thread.
-     */
+    /** Verifies the cookie is a real, unlocked session before treating it as success. */
     private fun attemptVerify(manual: Boolean) {
         val cookie = roblosecurity()
         if (cookie == null) {
-            if (manual) Toast.makeText(this, "Not logged in yet", Toast.LENGTH_SHORT).show()
+            if (manual) Toast.makeText(this, "Not logged in yet — tap Log In first", Toast.LENGTH_SHORT).show()
             return
         }
         if (verifying || loggedInHandled) return
         verifying = true
+        if (manual) statusView.text = "Checking…"
         Thread {
             val ok = RobloxApi.isValidSession(cookie)
             runOnUiThread {
                 verifying = false
                 if (resolved) return@runOnUiThread
-                if (ok) {
-                    onLoggedIn()
-                } else if (!revealed) {
-                    reveal("Tap Continue / confirm you're human to finish")
-                } else if (manual) {
-                    Toast.makeText(this, "Still locked — finish the verification on the page", Toast.LENGTH_SHORT).show()
-                }
+                if (ok) onLoggedIn()
+                else if (manual) Toast.makeText(this, "Not verified yet — finish the login / unlock on the page", Toast.LENGTH_LONG).show()
             }
         }.start()
     }
 
-    /** Detected a valid session: load the home page (behind the splash) and capture it. */
     private fun onLoggedIn() {
         if (loggedInHandled || resolved) return
         loggedInHandled = true
@@ -334,37 +301,17 @@ class LoginActivity : Activity() {
         null
     }
 
-    private fun reveal(message: String) {
-        revealed = true
-        revealWeb()
-        statusView.text = message
-        solveButton.visibility = View.VISIBLE
-        invalidButton.visibility = View.VISIBLE
-    }
-
-    private fun revealWeb() {
-        splash.visibility = View.GONE
-    }
-
     private fun coverWithSplash(message: String) {
-        statusView.text = message
+        splashText.text = message
         splash.visibility = View.VISIBLE
-        solveButton.visibility = View.GONE
-        invalidButton.visibility = View.GONE
     }
 
-    /**
-     * Hands a non-web URL to the system. Roblox's account-unlock / liveness
-     * check deep-links into the Roblox app via `intent://…`; opening it lets the
-     * user finish the unlock there. Returns true so the WebView doesn't try to
-     * load the unsupported scheme itself.
-     */
+    /** Hands non-web URLs (intent://, roblox://…) to the system, e.g. the unlock deep link. */
     private fun openExternal(url: String): Boolean {
         if (url.startsWith("intent://")) {
             val intent = runCatching { Intent.parseUri(url, Intent.URI_INTENT_SCHEME) }.getOrNull()
             if (intent != null) {
                 val fallback = intent.getStringExtra("browser_fallback_url")
-                // Try the app (explicit), then implicit, then web fallback / Play Store.
                 if (tryStart(intent)) return true
                 intent.`package` = null
                 if (tryStart(intent)) return true
@@ -381,8 +328,7 @@ class LoginActivity : Activity() {
     }
 
     private fun tryStart(intent: Intent): Boolean = try {
-        startActivity(intent)
-        true
+        startActivity(intent); true
     } catch (e: ActivityNotFoundException) {
         false
     } catch (e: Exception) {
@@ -446,7 +392,5 @@ class LoginActivity : Activity() {
         const val RESULT_VALID = "valid"
         const val RESULT_INVALID = "invalid"
         const val RESULT_CANCELLED = "cancelled"
-
-        private const val REVEAL_TIMEOUT_MS = 9000L
     }
 }
