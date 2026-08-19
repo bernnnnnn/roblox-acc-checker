@@ -70,7 +70,7 @@ class MainActivity : FragmentActivity() {
                         VaultScreen(
                             accounts = vm.visibleAccounts(),
                             query = vm.query,
-                            onQueryChange = vm::setQuery,
+                            onQueryChange = vm::updateQuery,
                             onImport = { text -> vm.importCombos(text) },
                             onAdd = { u, p, n -> vm.addAccount(u, p, n) },
                             onDelete = vm::delete,

@@ -22,7 +22,7 @@ class VaultViewModel(app: Application) : AndroidViewModel(app) {
         accounts.addAll(store.load())
     }
 
-    fun setQuery(value: String) { query = value }
+    fun updateQuery(value: String) { query = value }
 
     fun visibleAccounts(): List<Account> {
         val q = query.trim().lowercase()
