@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Login
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.PlaylistAddCheck
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -59,6 +60,7 @@ fun VaultScreen(
     onCheck: (Account) -> Unit,
     onOpen: (Account) -> Unit,
     onCopy: (String, String) -> Unit,
+    onAutoCheck: () -> Unit,
     contentPadding: PaddingValues,
 ) {
     var showAdd by remember { mutableStateOf(false) }
@@ -75,9 +77,17 @@ fun VaultScreen(
                 subtitle = "${accounts.size} account${if (accounts.size == 1) "" else "s"} stored securely",
                 icon = Icons.Filled.Shield,
                 trailing = {
-                    Surface(color = Color.White.copy(alpha = 0.18f), shape = CircleShape) {
-                        IconButton(onClick = { showAdd = true }) {
-                            Icon(Icons.Filled.Add, contentDescription = "Add", tint = Color.White)
+                    Row {
+                        Surface(color = NoctraAccent.copy(alpha = 0.16f), shape = CircleShape) {
+                            IconButton(onClick = onAutoCheck) {
+                                Icon(Icons.Filled.PlaylistAddCheck, contentDescription = "Auto-check all", tint = NoctraAccent)
+                            }
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Surface(color = NoctraAccent.copy(alpha = 0.16f), shape = CircleShape) {
+                            IconButton(onClick = { showAdd = true }) {
+                                Icon(Icons.Filled.Add, contentDescription = "Add", tint = NoctraAccent)
+                            }
                         }
                     }
                 },
@@ -114,7 +124,6 @@ fun VaultScreen(
                         onOpen = { onOpen(account) },
                         onCopyUser = { onCopy(account.username, "Username") },
                         onCopyPass = { onCopy(account.password, "Password") },
-                        onCopyCombo = { onCopy("${account.username}:${account.password}", "account:pass") },
                         onDelete = { confirmDelete = account },
                     )
                 }
@@ -152,7 +161,6 @@ private fun AccountCard(
     onOpen: () -> Unit,
     onCopyUser: () -> Unit,
     onCopyPass: () -> Unit,
-    onCopyCombo: () -> Unit,
     onDelete: () -> Unit,
 ) {
     Card(
@@ -200,7 +208,6 @@ private fun AccountCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SmallCopy("User", onCopyUser)
                 SmallCopy("Pass", onCopyPass)
-                SmallCopy("Combo", onCopyCombo)
                 Spacer(Modifier.weight(1f))
                 IconButton(onClick = onDelete) {
                     Icon(

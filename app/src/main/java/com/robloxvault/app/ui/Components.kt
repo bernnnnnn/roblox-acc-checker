@@ -27,7 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** The indigo→violet header banner shown at the top of each tab. */
+/** The dark Noctra header bar shown at the top of each tab. */
 @Composable
 fun GradientHeader(
     title: String,
@@ -35,32 +35,30 @@ fun GradientHeader(
     icon: ImageVector,
     trailing: @Composable (() -> Unit)? = null,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = Color.Transparent,
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                Brush.verticalGradient(listOf(NoctraSurfaceHi, NoctraFloating)),
+                RoundedCornerShape(bottomStart = 22.dp, bottomEnd = 22.dp),
+            )
+            .padding(start = 20.dp, end = 12.dp, top = 26.dp, bottom = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.linearGradient(listOf(BrandIndigo, BrandViolet)),
-                    RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
-                )
-                .padding(start = 20.dp, end = 16.dp, top = 22.dp, bottom = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(icon, contentDescription = null, tint = Color.White)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    subtitle,
-                    color = Color.White.copy(alpha = 0.85f),
-                    fontSize = 13.sp,
-                )
-            }
-            if (trailing != null) trailing()
+        Surface(color = NoctraAccent.copy(alpha = 0.14f), shape = RoundedCornerShape(12.dp)) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = NoctraAccent,
+                modifier = Modifier.padding(8.dp),
+            )
         }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, color = NoctraTextHi, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text(subtitle, color = NoctraMuted, fontSize = 13.sp)
+        }
+        if (trailing != null) trailing()
     }
 }
 

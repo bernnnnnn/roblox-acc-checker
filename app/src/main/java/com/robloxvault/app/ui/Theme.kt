@@ -1,51 +1,48 @@
 package com.robloxvault.app.ui
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-// Brand accents (also used for the header gradient).
-val BrandIndigo = Color(0xFF4F46E5)
-val BrandViolet = Color(0xFF7C3AED)
-val BrandCyan = Color(0xFF06B6D4)
+// ---- "Noctra" Discord theme palette --------------------------------------
+val NoctraBlack = Color(0xFF000000)       // BACKGROUND_PRIMARY
+val NoctraSurface = Color(0xFF0E0F12)      // BACKGROUND_SECONDARY (cards)
+val NoctraSurfaceHi = Color(0xFF15181D)    // BACKGROUND_TERTIARY
+val NoctraFloating = Color(0xFF111317)     // BACKGROUND_FLOATING (header)
+val NoctraOutline = Color(0xFF202733)      // BACKGROUND_MODIFIER_ACCENT
+val NoctraSelected = Color(0xFF313C49)     // BACKGROUND_MODIFIER_SELECTED
+val NoctraAccent = Color(0xFFD8E8FF)       // TEXT_LINK / brand accent (soft blue)
+val NoctraTextHi = Color(0xFFFFFFFF)       // HEADER_PRIMARY
+val NoctraText = Color(0xFFF4F6F8)         // TEXT_NORMAL
+val NoctraMuted = Color(0xFF7A8796)        // TEXT_MUTED
+val NoctraChip = Color(0xFF3C4856)         // BACKGROUND_ACCENT
 
-private val LightColors = lightColorScheme(
-    primary = BrandIndigo,
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFE0E7FF),
-    onPrimaryContainer = Color(0xFF1E1B4B),
-    secondary = BrandCyan,
-    background = Color(0xFFF5F6FB),
-    onBackground = Color(0xFF13151F),
-    surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF13151F),
-    surfaceVariant = Color(0xFFEEF0F7),
-    onSurfaceVariant = Color(0xFF515667),
-    outline = Color(0xFFD3D7E3),
-)
+// Functional status colors, tuned to sit on the black theme.
+val StatusGood = Color(0xFF3BA55D)
+val StatusBad = Color(0xFFED4245)
+val StatusWarn = Color(0xFFE0A030)
 
-private val DarkColors = darkColorScheme(
-    primary = Color(0xFF8B87FF),
-    onPrimary = Color(0xFF15132E),
-    primaryContainer = Color(0xFF2A2652),
-    onPrimaryContainer = Color(0xFFE0E7FF),
-    secondary = Color(0xFF38BDF8),
-    background = Color(0xFF0A0D1A),
-    onBackground = Color(0xFFE7E9F2),
-    surface = Color(0xFF12151F),
-    onSurface = Color(0xFFE7E9F2),
-    surfaceVariant = Color(0xFF1C2030),
-    onSurfaceVariant = Color(0xFFA6ABBE),
-    outline = Color(0xFF2C3242),
+private val NoctraColors = darkColorScheme(
+    primary = NoctraAccent,
+    onPrimary = NoctraBlack,
+    primaryContainer = NoctraSelected,
+    onPrimaryContainer = NoctraTextHi,
+    secondary = NoctraChip,
+    onSecondary = NoctraTextHi,
+    background = NoctraBlack,
+    onBackground = NoctraText,
+    surface = NoctraSurface,
+    onSurface = NoctraText,
+    surfaceVariant = NoctraSurfaceHi,
+    onSurfaceVariant = NoctraMuted,
+    outline = NoctraOutline,
+    error = StatusBad,
+    onError = NoctraTextHi,
 )
 
 @Composable
 fun RobloxVaultTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) DarkColors else LightColors,
-        content = content,
-    )
+    // The Noctra theme is inherently dark — always use it.
+    MaterialTheme(colorScheme = NoctraColors, content = content)
 }

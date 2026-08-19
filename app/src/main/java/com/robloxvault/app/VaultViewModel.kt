@@ -57,13 +57,14 @@ class VaultViewModel(app: Application) : AndroidViewModel(app) {
         persist()
     }
 
-    /** Records the outcome of a login check, storing the session on success. */
-    fun recordCheck(id: String, status: CheckStatus, cookie: String) {
+    /** Records the outcome of a login check, storing the session + screenshot on success. */
+    fun recordCheck(id: String, status: CheckStatus, cookie: String, shotPath: String) {
         update(id) {
             it.copy(
                 status = status,
                 lastCheckedEpoch = System.currentTimeMillis(),
                 roblosecurity = if (status == CheckStatus.VALID && cookie.isNotBlank()) cookie else it.roblosecurity,
+                screenshotPath = if (status == CheckStatus.VALID && shotPath.isNotBlank()) shotPath else it.screenshotPath,
             )
         }
         // Auto-pull info right after a successful login.
@@ -135,11 +136,9 @@ class VaultViewModel(app: Application) : AndroidViewModel(app) {
 
     // --- copy-text formatting ------------------------------------------------
 
-    fun credentialText(a: Account): String = "${a.username}:${a.password}"
-
+    /** Account info as copyable text. Password is intentionally excluded. */
     fun accountInfoText(a: Account): String = buildString {
         appendLine("Username: ${a.username}")
-        appendLine("Password: ${a.password}")
         if (a.userId > 0) appendLine("User ID: ${a.userId}")
         if (a.displayName.isNotBlank()) appendLine("Display name: ${a.displayName}")
         appendLine("Created: ${formatCreated(a.createdIso)}")
@@ -153,8 +152,11 @@ class VaultViewModel(app: Application) : AndroidViewModel(app) {
     fun allAccountsInfoText(): String =
         accounts.joinToString("\n\n") { accountInfoText(it) }
 
-    fun allCredentialsText(): String =
-        accounts.joinToString("\n") { credentialText(it) }
+    fun infoTextForIds(ids: Set<String>): String =
+        accounts.filter { it.id in ids }.joinToString("\n\n") { accountInfoText(it) }
+
+    fun screenshotPathsForIds(ids: Set<String>): List<String> =
+        accounts.filter { it.id in ids && it.hasScreenshot }.map { it.screenshotPath }
 
     private fun update(id: String, transform: (Account) -> Account) {
         val idx = accounts.indexOfFirst { it.id == id }

@@ -33,7 +33,11 @@ data class Account(
     val followers: Long = -1L,
     val infoUpdatedEpoch: Long = 0L,
     val infoError: String = "",
+
+    // Absolute path to a saved screenshot of this account logged in.
+    val screenshotPath: String = "",
 ) {
     val hasSession: Boolean get() = roblosecurity.isNotBlank()
     val hasInfo: Boolean get() = infoUpdatedEpoch > 0L
+    val hasScreenshot: Boolean get() = screenshotPath.isNotBlank()
 }
