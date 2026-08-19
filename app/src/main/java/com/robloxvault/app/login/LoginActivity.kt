@@ -2,9 +2,12 @@ package com.robloxvault.app.login
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -98,7 +101,13 @@ class LoginActivity : Activity() {
             settings.databaseEnabled = true
             settings.userAgentString = settings.userAgentString?.replace("; wv", "")
             webViewClient = object : WebViewClient() {
-                override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest) = false
+                override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest): Boolean {
+                    val url = r.url.toString()
+                    if (url.startsWith("http://") || url.startsWith("https://")) return false
+                    // Non-web scheme (intent://, roblox://, market://…) — e.g. the
+                    // account-unlock / liveness deep link into the Roblox app.
+                    return openExternal(url)
+                }
                 override fun onPageFinished(view: WebView, url: String?) {
                     if (resolved) return
                     if (mode == MODE_CHECK && isLoggedIn() && !loggedInHandled && !verifying) {
@@ -342,6 +351,42 @@ class LoginActivity : Activity() {
         splash.visibility = View.VISIBLE
         solveButton.visibility = View.GONE
         invalidButton.visibility = View.GONE
+    }
+
+    /**
+     * Hands a non-web URL to the system. Roblox's account-unlock / liveness
+     * check deep-links into the Roblox app via `intent://…`; opening it lets the
+     * user finish the unlock there. Returns true so the WebView doesn't try to
+     * load the unsupported scheme itself.
+     */
+    private fun openExternal(url: String): Boolean {
+        if (url.startsWith("intent://")) {
+            val intent = runCatching { Intent.parseUri(url, Intent.URI_INTENT_SCHEME) }.getOrNull()
+            if (intent != null) {
+                val fallback = intent.getStringExtra("browser_fallback_url")
+                // Try the app (explicit), then implicit, then web fallback / Play Store.
+                if (tryStart(intent)) return true
+                intent.`package` = null
+                if (tryStart(intent)) return true
+                if (fallback != null) { webView.loadUrl(fallback); return true }
+            }
+            Toast.makeText(this, "Open the Roblox app to finish the account unlock", Toast.LENGTH_LONG).show()
+            return true
+        }
+        val view = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        if (!tryStart(view)) {
+            Toast.makeText(this, "No app can open this link", Toast.LENGTH_SHORT).show()
+        }
+        return true
+    }
+
+    private fun tryStart(intent: Intent): Boolean = try {
+        startActivity(intent)
+        true
+    } catch (e: ActivityNotFoundException) {
+        false
+    } catch (e: Exception) {
+        false
     }
 
     private fun isLoggedIn(): Boolean = roblosecurity() != null
