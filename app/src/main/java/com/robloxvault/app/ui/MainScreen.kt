@@ -241,9 +241,11 @@ private fun AccountCard(
                     }
                     if (account.hasInfo) {
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            StatPill("Robux", VaultViewModel.formatNumber(account.robux), StatusGood)
-                            StatPill("RAP", VaultViewModel.formatNumber(account.rap), NoctraAccent)
+                            StatPill("Robux", if (account.robux >= 0) VaultViewModel.formatNumber(account.robux) else "login", StatusGood)
+                            StatPill("RAP", if (account.inventoryPrivate) "private" else VaultViewModel.formatNumber(account.rap), NoctraAccent)
+                            StatPill("Items", if (account.inventoryPrivate) "private" else VaultViewModel.formatNumber(account.itemCount), NoctraAccent)
                             StatPill("Friends", VaultViewModel.formatNumber(account.friends), NoctraChip)
+                            StatPill("Followers", VaultViewModel.formatNumber(account.followers), NoctraChip)
                             StatPill("Created", VaultViewModel.formatCreated(account.createdIso), NoctraMuted)
                         }
                         Spacer(Modifier.height(10.dp))

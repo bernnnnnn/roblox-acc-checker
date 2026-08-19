@@ -31,6 +31,8 @@ data class Account(
     val premium: Boolean = false,
     val friends: Long = -1L,
     val followers: Long = -1L,
+    val itemCount: Long = -1L,
+    val inventoryPrivate: Boolean = false,
     val infoUpdatedEpoch: Long = 0L,
     val infoError: String = "",
 

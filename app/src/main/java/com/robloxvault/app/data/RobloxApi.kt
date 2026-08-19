@@ -26,8 +26,95 @@ object RobloxApi {
         val followers: Long,
     )
 
+    /** Public profile data readable from just a username — no login required. */
+    data class PublicInfo(
+        val userId: Long,
+        val username: String,
+        val displayName: String,
+        val createdIso: String,
+        val banned: Boolean,
+        val friends: Long,
+        val followers: Long,
+        val rap: Long,
+        val itemCount: Long,
+        val inventoryPrivate: Boolean,
+    )
+
     /** Thrown when the stored session is no longer valid. */
     class SessionExpired : Exception("Session expired — tap Check to log in again")
+
+    /**
+     * Fetches everything publicly visible for a username — created date, friends,
+     * followers, and (if the inventory isn't hidden) RAP + item count. No cookie,
+     * no login, so it works for locked accounts too. Robux is NOT public and is
+     * therefore never returned here.
+     */
+    suspend fun fetchPublicInfo(username: String): PublicInfo? = withContext(Dispatchers.IO) {
+        val userId = resolveUserId(username) ?: return@withContext null
+
+        val detail = JSONObject(getPublic("https://users.roblox.com/v1/users/$userId"))
+        val name = detail.optString("name", username)
+        val displayName = detail.optString("displayName", name)
+        val createdIso = detail.optString("created")
+        val banned = detail.optBoolean("isBanned", false)
+
+        val friends = runCatching {
+            JSONObject(getPublic("https://friends.roblox.com/v1/users/$userId/friends/count")).optLong("count", -1L)
+        }.getOrDefault(-1L)
+        val followers = runCatching {
+            JSONObject(getPublic("https://friends.roblox.com/v1/users/$userId/followers/count")).optLong("count", -1L)
+        }.getOrDefault(-1L)
+
+        val canView = runCatching {
+            JSONObject(getPublic("https://inventory.roblox.com/v1/users/$userId/can-view-inventory")).optBoolean("canView", false)
+        }.getOrDefault(false)
+
+        var rap = -1L
+        var items = -1L
+        if (canView) {
+            runCatching { collectibles(userId, null) }.getOrNull()?.let { (r, c) -> rap = r; items = c }
+        }
+
+        PublicInfo(userId, name, displayName, createdIso, banned, friends, followers, rap, items, inventoryPrivate = !canView)
+    }
+
+    /** Resolves a username to its userId via the public usernames endpoint. */
+    private fun resolveUserId(username: String): Long? = try {
+        val body = JSONObject().apply {
+            put("usernames", org.json.JSONArray().put(username))
+            put("excludeBannedUsers", false)
+        }.toString()
+        val resp = postPublic("https://users.roblox.com/v1/usernames/users", body)
+        val arr = JSONObject(resp).optJSONArray("data")
+        if (arr != null && arr.length() > 0) arr.getJSONObject(0).optLong("id").takeIf { it > 0 } else null
+    } catch (e: Exception) {
+        null
+    }
+
+    /** Returns (rap, itemCount) summed over public collectibles. */
+    private fun collectibles(userId: Long, cookieOrNull: String?): Pair<Long, Long> {
+        var rap = 0L
+        var count = 0L
+        var cursor: String? = null
+        var page = 0
+        do {
+            val url = buildString {
+                append("https://inventory.roblox.com/v1/users/").append(userId)
+                append("/assets/collectibles?sortOrder=Asc&limit=100")
+                if (!cursor.isNullOrBlank()) append("&cursor=").append(cursor)
+            }
+            val json = if (cookieOrNull != null) get(url, cookieOrNull) else getPublic(url)
+            val obj = JSONObject(json)
+            val data = obj.optJSONArray("data") ?: break
+            for (i in 0 until data.length()) {
+                rap += data.getJSONObject(i).optLong("recentAveragePrice", 0L)
+                count += 1
+            }
+            cursor = obj.optString("nextPageCursor").ifBlank { null }
+            page++
+        } while (cursor != null && page < 20)
+        return rap to count
+    }
 
     /**
      * Blocking check (call off the main thread) that returns true only if the
@@ -129,6 +216,49 @@ object RobloxApi {
             if (code !in 200..299) {
                 throw Exception("HTTP $code")
             }
+            return body
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    /** Unauthenticated GET for public endpoints. */
+    private fun getPublic(urlStr: String): String {
+        val conn = (URL(urlStr).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 15000
+            readTimeout = 15000
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile")
+        }
+        try {
+            val code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            if (code !in 200..299) throw Exception("HTTP $code")
+            return body
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    /** Unauthenticated POST with a JSON body (public endpoints only). */
+    private fun postPublic(urlStr: String, jsonBody: String): String {
+        val conn = (URL(urlStr).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 15000
+            readTimeout = 15000
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile")
+        }
+        try {
+            conn.outputStream.use { it.write(jsonBody.toByteArray(Charsets.UTF_8)) }
+            val code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            if (code !in 200..299) throw Exception("HTTP $code")
             return body
         } finally {
             conn.disconnect()

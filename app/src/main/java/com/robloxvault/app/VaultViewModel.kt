@@ -90,25 +90,17 @@ class VaultViewModel(app: Application) : AndroidViewModel(app) {
         if (status == CheckStatus.VALID && cookie.isNotBlank()) refreshInfo(id)
     }
 
-    /** Checks one account via its cookie: validates + pulls info, updates status. */
+    /** Checks one account: full info via cookie if present, else public info by username. */
     fun refreshInfo(id: String) {
         val account = accounts.firstOrNull { it.id == id } ?: return
-        if (!account.hasSession) {
-            update(id) { it.copy(infoError = "No session — log in once or import a cookie") }
-            return
-        }
         viewModelScope.launch { checkOne(account) }
     }
 
-    /** Reliable batch check: validates every cookie account and loads its info. */
+    /** Batch check across all accounts (cookie → full; else public by username). */
     fun checkAll() {
         viewModelScope.launch {
             refreshingAll = true
             for (account in accounts.toList()) {
-                if (!account.hasSession) {
-                    update(account.id) { it.copy(infoError = "No session — log in or import a cookie") }
-                    continue
-                }
                 checkOne(accounts.firstOrNull { it.id == account.id } ?: account)
             }
             refreshingAll = false
@@ -116,17 +108,36 @@ class VaultViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private suspend fun checkOne(account: Account) {
-        runCatching { RobloxApi.fetchInfo(account.roblosecurity) }
-            .onSuccess { info -> applyInfo(account.id, info) }
-            .onFailure { e ->
-                update(account.id) {
-                    it.copy(
-                        status = CheckStatus.INVALID,
-                        infoError = e.message ?: "Dead / expired session",
-                        lastCheckedEpoch = System.currentTimeMillis(),
-                    )
+        if (account.hasSession) {
+            runCatching { RobloxApi.fetchInfo(account.roblosecurity) }
+                .onSuccess { info -> applyInfo(account.id, info) }
+                .onFailure {
+                    // Session dead — still show public data if we know the username.
+                    if (account.username.isNotBlank()) publicFetch(account, deadSession = true)
+                    else update(account.id) {
+                        it.copy(status = CheckStatus.INVALID, infoError = "Dead / expired session", lastCheckedEpoch = System.currentTimeMillis())
+                    }
+                }
+        } else if (account.username.isNotBlank()) {
+            publicFetch(account, deadSession = false)
+        } else {
+            update(account.id) { it.copy(infoError = "Add a username or cookie first") }
+        }
+    }
+
+    private suspend fun publicFetch(account: Account, deadSession: Boolean) {
+        runCatching { RobloxApi.fetchPublicInfo(account.username) }
+            .onSuccess { pub ->
+                if (pub == null) {
+                    update(account.id) { it.copy(infoError = "User not found") }
+                } else {
+                    applyPublic(account.id, pub)
+                    if (deadSession) update(account.id) {
+                        it.copy(status = CheckStatus.INVALID, infoError = "Login dead — public data only")
+                    }
                 }
             }
+            .onFailure { e -> update(account.id) { it.copy(infoError = e.message ?: "Lookup failed") } }
     }
 
     private fun applyInfo(id: String, info: RobloxApi.Info) = update(id) {
@@ -147,6 +158,23 @@ class VaultViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
+    private fun applyPublic(id: String, pub: RobloxApi.PublicInfo) = update(id) {
+        it.copy(
+            username = if (it.username.isBlank() && pub.username.isNotBlank()) pub.username else it.username,
+            userId = pub.userId,
+            displayName = pub.displayName,
+            createdIso = pub.createdIso,
+            friends = pub.friends,
+            followers = pub.followers,
+            rap = pub.rap,
+            itemCount = pub.itemCount,
+            inventoryPrivate = pub.inventoryPrivate,
+            infoUpdatedEpoch = System.currentTimeMillis(),
+            lastCheckedEpoch = System.currentTimeMillis(),
+            infoError = "",
+        )
+    }
+
     // --- copy-text formatting ------------------------------------------------
 
     /** Account info as copyable text. Password is intentionally excluded. */
@@ -155,8 +183,9 @@ class VaultViewModel(app: Application) : AndroidViewModel(app) {
         if (a.userId > 0) appendLine("User ID: ${a.userId}")
         if (a.displayName.isNotBlank()) appendLine("Display name: ${a.displayName}")
         appendLine("Created: ${formatCreated(a.createdIso)}")
-        appendLine("Robux: ${formatNumber(a.robux)}")
-        appendLine("RAP: ${formatNumber(a.rap)}")
+        appendLine("Robux: ${if (a.robux >= 0) formatNumber(a.robux) else "login required"}")
+        appendLine("RAP: ${if (a.inventoryPrivate) "private" else formatNumber(a.rap)}")
+        appendLine("Items: ${if (a.inventoryPrivate) "private" else formatNumber(a.itemCount)}")
         appendLine("Premium: ${if (a.premium) "Yes" else "No"}")
         appendLine("Friends: ${formatNumber(a.friends)}")
         append("Followers: ${formatNumber(a.followers)}")

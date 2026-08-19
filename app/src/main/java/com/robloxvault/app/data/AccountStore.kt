@@ -57,6 +57,8 @@ class AccountStore(context: Context) {
         put("premium", a.premium)
         put("friends", a.friends)
         put("followers", a.followers)
+        put("itemCount", a.itemCount)
+        put("inventoryPrivate", a.inventoryPrivate)
         put("infoUpdatedEpoch", a.infoUpdatedEpoch)
         put("infoError", a.infoError)
         put("screenshotPath", a.screenshotPath)
@@ -79,6 +81,8 @@ class AccountStore(context: Context) {
         premium = o.optBoolean("premium", false),
         friends = o.optLong("friends", -1L),
         followers = o.optLong("followers", -1L),
+        itemCount = o.optLong("itemCount", -1L),
+        inventoryPrivate = o.optBoolean("inventoryPrivate", false),
         infoUpdatedEpoch = o.optLong("infoUpdatedEpoch", 0L),
         infoError = o.optString("infoError"),
         screenshotPath = o.optString("screenshotPath"),
