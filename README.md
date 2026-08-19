@@ -30,18 +30,28 @@ through Roblox's real login page with one tap.
   on Roblox's page.
 - **Open (quick login).** Same login flow but keeps the session, so you land
   logged in.
-- **Copy** username or password to the clipboard when you'd rather paste.
+- **Copy** username, password, or `account:pass` to the clipboard.
+- **Account Info tab** — reads each account's **creation date, RAP, Robux,
+  premium status, and friends/followers** using that account's *own* login
+  session (captured when you tap **Check**). Refresh one account or all at once,
+  and copy any single field, a whole account's info, or every account's info at
+  once. Accounts you haven't logged into yet show "log in first".
 
 ## Getting the APK
 
-### Option A — download from CI (no local setup)
-Every push builds the APK on GitHub Actions:
-1. Open the **Actions** tab → the latest **Build APK** run.
-2. Download the **`roblox-vault-debug-apk`** artifact.
-3. Unzip and install `app-debug.apk` on your phone (allow "install unknown
-   apps" for your browser/file manager).
+### Option A — download from Releases (easiest, phone-friendly)
+Every push builds the APK and attaches it to a **prerelease** so it's one tap
+to download — no desktop mode, works in the GitHub mobile app and browser:
+1. Open the repo's **Releases** → **Roblox Vault (latest debug build)**.
+2. Under **Assets**, tap **`roblox-vault.apk`**.
+3. Tap the downloaded file to install (allow "install unknown apps" if asked).
 
-You can also trigger it manually via **Actions → Build APK → Run workflow**.
+### Option B — download the CI artifact
+1. **Actions** tab → latest **Build APK** run → **Artifacts** →
+   **`roblox-vault-debug-apk`** (a zip containing the APK).
+
+Trigger a fresh build anytime via **Actions → Build APK → Run workflow**, or by
+pushing any commit.
 
 ### Option B — build locally
 Requires the Android SDK (e.g. via Android Studio).

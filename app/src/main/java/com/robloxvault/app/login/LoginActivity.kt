@@ -174,19 +174,25 @@ class LoginActivity : Activity() {
         }
     }
 
-    private fun isLoggedIn(): Boolean {
-        val cookies = CookieManager.getInstance().getCookie("https://www.roblox.com") ?: return false
-        return cookies.contains(".ROBLOSECURITY")
+    private fun isLoggedIn(): Boolean = roblosecurity() != null
+
+    /** Extracts the .ROBLOSECURITY value from the WebView cookie jar, if present. */
+    private fun roblosecurity(): String? {
+        val cookies = CookieManager.getInstance().getCookie("https://www.roblox.com") ?: return null
+        return cookies.split(";")
+            .map { it.trim() }
+            .firstOrNull { it.startsWith(".ROBLOSECURITY=") }
+            ?.substringAfter("=")
+            ?.takeIf { it.isNotBlank() }
     }
 
     private fun finishWith(result: String) {
         if (resolved) return
         resolved = true
         handler.removeCallbacksAndMessages(null)
-        setResult(
-            Activity.RESULT_OK,
-            intent.putExtra(EXTRA_RESULT, result).putExtra(EXTRA_ACCOUNT_ID, accountId),
-        )
+        intent.putExtra(EXTRA_RESULT, result).putExtra(EXTRA_ACCOUNT_ID, accountId)
+        if (result == RESULT_VALID) intent.putExtra(EXTRA_COOKIE, roblosecurity().orEmpty())
+        setResult(Activity.RESULT_OK, intent)
         finish()
     }
 
@@ -210,6 +216,7 @@ class LoginActivity : Activity() {
         const val EXTRA_MODE = "mode"
         const val EXTRA_ACCOUNT_ID = "account_id"
         const val EXTRA_RESULT = "result_status"
+        const val EXTRA_COOKIE = "roblosecurity"
 
         const val MODE_CHECK = "check"
         const val MODE_OPEN = "open"

@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -31,9 +34,27 @@ jobs:
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace --no-daemon
 
+      - name: Rename APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk roblox-vault.apk
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: roblox-vault-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: roblox-vault.apk
           if-no-files-found: error
+
+      - name: Publish to GitHub Release
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: debug-latest
+          name: Roblox Vault (latest debug build)
+          prerelease: true
+          body: |
+            Latest debug build of Roblox Vault, built automatically from
+            `${{ github.sha }}`.
+
+            **Install:** download `roblox-vault.apk` below, tap it on your phone,
+            and allow "install unknown apps" if prompted.
+          files: roblox-vault.apk

@@ -2,6 +2,7 @@ package com.robloxvault.app
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -9,6 +10,10 @@ import androidx.compose.runtime.setValue
 import com.robloxvault.app.data.Account
 import com.robloxvault.app.data.AccountStore
 import com.robloxvault.app.data.CheckStatus
+import com.robloxvault.app.data.RobloxApi
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class VaultViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -16,6 +21,8 @@ class VaultViewModel(app: Application) : AndroidViewModel(app) {
 
     val accounts = mutableStateListOf<Account>()
     var query by mutableStateOf("")
+        private set
+    var refreshingAll by mutableStateOf(false)
         private set
 
     init {
@@ -50,19 +57,134 @@ class VaultViewModel(app: Application) : AndroidViewModel(app) {
         persist()
     }
 
-    fun updateStatus(id: String, status: CheckStatus) {
-        val idx = accounts.indexOfFirst { it.id == id }
-        if (idx >= 0) {
-            accounts[idx] = accounts[idx].copy(
+    /** Records the outcome of a login check, storing the session on success. */
+    fun recordCheck(id: String, status: CheckStatus, cookie: String) {
+        update(id) {
+            it.copy(
                 status = status,
                 lastCheckedEpoch = System.currentTimeMillis(),
+                roblosecurity = if (status == CheckStatus.VALID && cookie.isNotBlank()) cookie else it.roblosecurity,
             )
+        }
+        // Auto-pull info right after a successful login.
+        if (status == CheckStatus.VALID && cookie.isNotBlank()) refreshInfo(id)
+    }
+
+    fun refreshInfo(id: String) {
+        val account = accounts.firstOrNull { it.id == id } ?: return
+        if (!account.hasSession) {
+            update(id) { it.copy(infoError = "Not logged in — tap Check first") }
+            return
+        }
+        viewModelScope.launch {
+            runCatching { RobloxApi.fetchInfo(account.roblosecurity) }
+                .onSuccess { info ->
+                    update(id) {
+                        it.copy(
+                            userId = info.userId,
+                            displayName = info.displayName,
+                            createdIso = info.createdIso,
+                            robux = info.robux,
+                            rap = info.rap,
+                            premium = info.premium,
+                            friends = info.friends,
+                            followers = info.followers,
+                            infoUpdatedEpoch = System.currentTimeMillis(),
+                            infoError = "",
+                        )
+                    }
+                }
+                .onFailure { e ->
+                    update(id) { it.copy(infoError = e.message ?: "Failed to load info") }
+                }
+        }
+    }
+
+    fun refreshAllInfo() {
+        viewModelScope.launch {
+            refreshingAll = true
+            for (account in accounts.toList()) {
+                if (!account.hasSession) {
+                    update(account.id) { it.copy(infoError = "Not logged in — tap Check first") }
+                    continue
+                }
+                runCatching { RobloxApi.fetchInfo(account.roblosecurity) }
+                    .onSuccess { info ->
+                        update(account.id) {
+                            it.copy(
+                                userId = info.userId,
+                                displayName = info.displayName,
+                                createdIso = info.createdIso,
+                                robux = info.robux,
+                                rap = info.rap,
+                                premium = info.premium,
+                                friends = info.friends,
+                                followers = info.followers,
+                                infoUpdatedEpoch = System.currentTimeMillis(),
+                                infoError = "",
+                            )
+                        }
+                    }
+                    .onFailure { e ->
+                        update(account.id) { it.copy(infoError = e.message ?: "Failed to load info") }
+                    }
+            }
+            refreshingAll = false
+        }
+    }
+
+    // --- copy-text formatting ------------------------------------------------
+
+    fun credentialText(a: Account): String = "${a.username}:${a.password}"
+
+    fun accountInfoText(a: Account): String = buildString {
+        appendLine("Username: ${a.username}")
+        appendLine("Password: ${a.password}")
+        if (a.userId > 0) appendLine("User ID: ${a.userId}")
+        if (a.displayName.isNotBlank()) appendLine("Display name: ${a.displayName}")
+        appendLine("Created: ${formatCreated(a.createdIso)}")
+        appendLine("Robux: ${formatNumber(a.robux)}")
+        appendLine("RAP: ${formatNumber(a.rap)}")
+        appendLine("Premium: ${if (a.premium) "Yes" else "No"}")
+        appendLine("Friends: ${formatNumber(a.friends)}")
+        append("Followers: ${formatNumber(a.followers)}")
+    }
+
+    fun allAccountsInfoText(): String =
+        accounts.joinToString("\n\n") { accountInfoText(it) }
+
+    fun allCredentialsText(): String =
+        accounts.joinToString("\n") { credentialText(it) }
+
+    private fun update(id: String, transform: (Account) -> Account) {
+        val idx = accounts.indexOfFirst { it.id == id }
+        if (idx >= 0) {
+            accounts[idx] = transform(accounts[idx])
             persist()
         }
     }
 
-    fun exportText(): String =
-        accounts.joinToString("\n") { "${it.username}:${it.password}" }
-
     private fun persist() = store.save(accounts.toList())
+
+    companion object {
+        fun formatNumber(value: Long): String =
+            if (value < 0) "—" else "%,d".format(value)
+
+        fun formatCreated(iso: String): String {
+            if (iso.isBlank()) return "—"
+            // ISO like 2019-05-01T12:34:56.000Z -> 2019-05-01
+            return iso.substringBefore('T').ifBlank { iso }
+        }
+
+        fun accountAgeYears(iso: String): String {
+            if (iso.isBlank()) return ""
+            return runCatching {
+                val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                val created = fmt.parse(iso.substringBefore('T')) ?: return ""
+                val days = (System.currentTimeMillis() - created.time) / 86_400_000.0
+                val years = days / 365.0
+                if (years >= 1) "%.1f yr".format(years) else "${days.toInt()} d"
+            }.getOrDefault("")
+        }
+    }
 }

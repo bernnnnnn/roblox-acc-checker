@@ -48,6 +48,17 @@ class AccountStore(context: Context) {
         put("status", a.status.name)
         put("note", a.note)
         put("lastCheckedEpoch", a.lastCheckedEpoch)
+        put("roblosecurity", a.roblosecurity)
+        put("userId", a.userId)
+        put("displayName", a.displayName)
+        put("createdIso", a.createdIso)
+        put("robux", a.robux)
+        put("rap", a.rap)
+        put("premium", a.premium)
+        put("friends", a.friends)
+        put("followers", a.followers)
+        put("infoUpdatedEpoch", a.infoUpdatedEpoch)
+        put("infoError", a.infoError)
     }
 
     private fun fromJson(o: JSONObject) = Account(
@@ -58,6 +69,17 @@ class AccountStore(context: Context) {
             .getOrDefault(CheckStatus.UNKNOWN),
         note = o.optString("note"),
         lastCheckedEpoch = o.optLong("lastCheckedEpoch", 0L),
+        roblosecurity = o.optString("roblosecurity"),
+        userId = o.optLong("userId", 0L),
+        displayName = o.optString("displayName"),
+        createdIso = o.optString("createdIso"),
+        robux = o.optLong("robux", -1L),
+        rap = o.optLong("rap", -1L),
+        premium = o.optBoolean("premium", false),
+        friends = o.optLong("friends", -1L),
+        followers = o.optLong("followers", -1L),
+        infoUpdatedEpoch = o.optLong("infoUpdatedEpoch", 0L),
+        infoError = o.optString("infoError"),
     )
 
     companion object {
