@@ -7,7 +7,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -105,7 +104,6 @@ class MainActivity : FragmentActivity() {
                                 onCheckAll = { vm.checkAll() },
                                 onCheckSelected = { ids -> vm.checkSelected(ids) },
                                 checking = vm.refreshingAll,
-                                onEnableAutofill = { enableAutofill() },
                                 contentPadding = PaddingValues(0.dp),
                             )
                         }
@@ -163,11 +161,11 @@ class MainActivity : FragmentActivity() {
                     .getOrNull()?.let { uris.add(it) }
             }
             if (uris.isEmpty()) { Toast.makeText(this@MainActivity, "Couldn't build cards", Toast.LENGTH_SHORT).show(); return@launch }
-            val text = accounts.joinToString("\n\n") { vm.accountInfoText(it) }
+            // Images only — no text added to the share.
             val send = if (uris.size == 1) {
-                Intent(Intent.ACTION_SEND).apply { type = "image/png"; putExtra(Intent.EXTRA_TEXT, text); putExtra(Intent.EXTRA_STREAM, uris[0]) }
+                Intent(Intent.ACTION_SEND).apply { type = "image/png"; putExtra(Intent.EXTRA_STREAM, uris[0]) }
             } else {
-                Intent(Intent.ACTION_SEND_MULTIPLE).apply { type = "image/png"; putExtra(Intent.EXTRA_TEXT, text); putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris) }
+                Intent(Intent.ACTION_SEND_MULTIPLE).apply { type = "image/png"; putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris) }
             }
             send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             val discordInstalled = packageManager.getLaunchIntentForPackage("com.discord") != null
@@ -178,17 +176,7 @@ class MainActivity : FragmentActivity() {
                 send.setPackage(null)
                 startActivity(Intent.createChooser(send, "Share"))
             }
-        }
-    }
-
-    private fun enableAutofill() {
-        try {
-            startActivity(
-                Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE).setData(Uri.parse("package:$packageName")),
-            )
-        } catch (e: Exception) {
-            Toast.makeText(this, "Open Settings → Passwords & autofill → pick Roblox Vault", Toast.LENGTH_LONG).show()
-            runCatching { startActivity(Intent(Settings.ACTION_SETTINGS)) }
+            vm.markShared(accounts.map { it.id }.toSet())
         }
     }
 

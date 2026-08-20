@@ -31,7 +31,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Login
-import androidx.compose.material.icons.filled.Password
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shield
@@ -89,7 +88,6 @@ fun MainScreen(
     onCheckAll: () -> Unit,
     onCheckSelected: (Set<String>) -> Unit,
     checking: Boolean,
-    onEnableAutofill: () -> Unit,
     contentPadding: PaddingValues,
 ) {
     var showAdd by remember { mutableStateOf(false) }
@@ -120,8 +118,6 @@ fun MainScreen(
                             }
                         }
                         Spacer(Modifier.width(8.dp))
-                        HeaderCircle(Icons.Filled.Password, "Enable autofill", onEnableAutofill)
-                        Spacer(Modifier.width(8.dp))
                         HeaderCircle(Icons.Filled.Add, "Add", { showAdd = true })
                     }
                 },
@@ -142,9 +138,9 @@ fun MainScreen(
             item {
                 SelectionBar(
                     count = selected.size,
-                    total = accounts.size,
                     onAll = { selected.clear(); selected.addAll(accounts.map { it.id }) },
-                    onNone = { selected.clear() },
+                    onUnshared = { selected.clear(); selected.addAll(accounts.filter { !it.shared }.map { it.id }) },
+                    onClear = { selected.clear() },
                     onCheck = { onCheckSelected(selected.toSet()) },
                     onShare = { onShareDiscord(accounts.filter { it.id in selected }) },
                 )
@@ -204,28 +200,37 @@ private fun HeaderCircle(icon: ImageVector, desc: String, onClick: () -> Unit) {
 
 @Composable
 private fun SelectionBar(
-    count: Int, total: Int,
-    onAll: () -> Unit, onNone: () -> Unit,
-    onCheck: () -> Unit, onShare: () -> Unit,
+    count: Int,
+    onAll: () -> Unit,
+    onUnshared: () -> Unit,
+    onClear: () -> Unit,
+    onCheck: () -> Unit,
+    onShare: () -> Unit,
 ) {
     Surface(
         color = NoctraSurfaceHi,
         shape = RoundedCornerShape(14.dp),
         modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
     ) {
-        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = if (count == total && total > 0) onNone else onAll) {
-                Text(if (count == total && total > 0) "None" else "All")
+        Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onAll, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("All") }
+                TextButton(onClick = onUnshared, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Unshared") }
+                TextButton(onClick = onClear, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Clear") }
+                Spacer(Modifier.weight(1f))
+                Text("$count", color = NoctraMuted, fontSize = 13.sp)
+                Spacer(Modifier.width(8.dp))
             }
-            Spacer(Modifier.weight(1f))
-            OutlinedButton(onClick = onCheck, enabled = count > 0) {
-                Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp)); Text("Check")
-            }
-            Spacer(Modifier.width(8.dp))
-            FilledTonalButton(onClick = onShare, enabled = count > 0) {
-                Icon(Icons.Filled.Share, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp)); Text("Discord")
+            Row(Modifier.padding(top = 2.dp)) {
+                OutlinedButton(onClick = onCheck, enabled = count > 0, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp)); Text("Check")
+                }
+                Spacer(Modifier.width(8.dp))
+                FilledTonalButton(onClick = onShare, enabled = count > 0, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Filled.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp)); Text("Discord")
+                }
             }
         }
     }

@@ -65,6 +65,16 @@ class VaultViewModel(app: Application) : AndroidViewModel(app) {
 
     fun updateNote(id: String, note: String) = update(id) { it.copy(note = note.trim()) }
 
+    /** Marks these accounts as shared (so "select unshared" can skip them). */
+    fun markShared(ids: Set<String>) {
+        var changed = false
+        ids.forEach { id ->
+            val idx = accounts.indexOfFirst { it.id == id }
+            if (idx >= 0 && !accounts[idx].shared) { accounts[idx] = accounts[idx].copy(shared = true); changed = true }
+        }
+        if (changed) persist()
+    }
+
     /** Manual status the user sets by tapping the chip: Unchecked → Working → Locked → Dead. */
     fun cycleStatus(id: String) = update(id) {
         val next = when (it.status) {

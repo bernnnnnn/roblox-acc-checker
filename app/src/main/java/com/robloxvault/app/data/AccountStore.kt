@@ -63,6 +63,7 @@ class AccountStore(context: Context) {
         put("infoUpdatedEpoch", a.infoUpdatedEpoch)
         put("infoError", a.infoError)
         put("screenshotPath", a.screenshotPath)
+        put("shared", a.shared)
     }
 
     private fun fromJson(o: JSONObject) = Account(
@@ -88,6 +89,7 @@ class AccountStore(context: Context) {
         infoUpdatedEpoch = o.optLong("infoUpdatedEpoch", 0L),
         infoError = o.optString("infoError"),
         screenshotPath = o.optString("screenshotPath"),
+        shared = o.optBoolean("shared", false),
     )
 
     companion object {
