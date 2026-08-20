@@ -10,7 +10,6 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
 import com.robloxvault.app.data.Account
-import com.robloxvault.app.data.CheckStatus
 import com.robloxvault.app.data.RobloxApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -35,7 +34,7 @@ object ProfileCard {
             ?.let { runCatching { BitmapFactory.decodeByteArray(it, 0, it.size) }.getOrNull() }
 
         val w = 1000
-        val h = 520
+        val h = 680
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
         val p = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -90,28 +89,26 @@ object ProfileCard {
         }
 
         p.color = Color.parseColor("#D8E8FF")
-        p.textSize = 42f
-        c.drawText("Created: ${account.createdIso.substringBefore('T').ifBlank { "—" }}", tx, y, p)
-        y += 58f
-        if (account.robux >= 0) { c.drawText("Robux: ${"%,d".format(account.robux)}", tx, y, p); y += 58f }
+        p.textSize = 40f
+        val lh = 50f
+        fun num(v: Long) = if (v >= 0) "%,d".format(v) else "—"
+        c.drawText("Created: ${account.createdIso.substringBefore('T').ifBlank { "—" }}", tx, y, p); y += lh
+        if (account.robux >= 0) { c.drawText("Robux: ${num(account.robux)}", tx, y, p); y += lh }
+        c.drawText("Premium: ${if (account.premium) "Yes" else "No"}", tx, y, p); y += lh
+        c.drawText("Friends: ${num(account.friends)}", tx, y, p); y += lh
+        c.drawText("Followers: ${num(account.followers)}", tx, y, p); y += lh + 8f
 
         // HIT line (replaces RAP) — green when the password worked.
-        val locked = account.status == CheckStatus.NEEDS_VERIFICATION
         p.typeface = Typeface.DEFAULT_BOLD
         p.textSize = 50f
         p.color = if (account.passwordWorked) Color.parseColor("#3BA55D") else Color.parseColor("#7A8796")
         c.drawText("HIT ~ flyingroach33", tx, y, p)
-        y += 50f
+        y += 48f
 
         p.typeface = Typeface.DEFAULT
         p.textSize = 32f
         p.color = Color.parseColor("#7A8796")
-        val pw = when {
-            account.passwordWorked && locked -> "Password works · account locked"
-            account.passwordWorked -> "Password works"
-            else -> "Password unverified"
-        }
-        c.drawText(pw, tx, y, p)
+        c.drawText(if (account.passwordWorked) "Password works" else "Password unverified", tx, y, p)
 
         // Footer.
         p.color = Color.parseColor("#515667")
