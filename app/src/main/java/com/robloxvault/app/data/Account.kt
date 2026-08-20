@@ -42,6 +42,9 @@ data class Account(
 
     // Absolute path to a saved screenshot of this account logged in.
     val screenshotPath: String = "",
+
+    // True once this account's card has been shared to Discord.
+    val shared: Boolean = false,
 ) {
     val hasSession: Boolean get() = roblosecurity.isNotBlank()
     val hasInfo: Boolean get() = infoUpdatedEpoch > 0L
