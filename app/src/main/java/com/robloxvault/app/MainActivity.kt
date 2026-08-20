@@ -12,6 +12,10 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
+import androidx.activity.viewModels
+import androidx.lifecycle.lifecycleScope
+import com.robloxvault.app.share.ProfileCard
+import kotlinx.coroutines.launch
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.Image
@@ -44,6 +48,7 @@ import com.robloxvault.app.ui.RobloxVaultTheme
 class MainActivity : FragmentActivity() {
 
     private lateinit var lockManager: LockManager
+    private val vm: VaultViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,7 +66,6 @@ class MainActivity : FragmentActivity() {
                     )
                     Box(Modifier.fillMaxSize().background(Color(0xB3000000)))
                     Surface(color = Color.Transparent, contentColor = NoctraText) {
-                        val vm: VaultViewModel = viewModel()
                         val hasPin = remember { lockManager.hasPin() }
                         val bioAvailable = remember { canUseBiometrics() && hasPin }
                         var unlocked by remember { mutableStateOf(!hasPin && lockManager.setupSkipped()) }
@@ -103,14 +107,11 @@ class MainActivity : FragmentActivity() {
                                 onCopy = { value, label -> copyToClipboard(value, label) },
                                 onCycleStatus = { id -> vm.cycleStatus(id) },
                                 onLoadStats = { acc -> vm.refreshInfo(acc.id) },
+                                onCopyCard = { acc -> copyCard(acc) },
+                                onShareDiscord = { list -> shareToDiscord(list) },
                                 onCheckAll = { vm.checkAll() },
+                                onCheckSelected = { ids -> vm.checkSelected(ids) },
                                 checking = vm.refreshingAll,
-                                onShare = { acc ->
-                                    shareInfo(
-                                        vm.accountInfoText(acc),
-                                        if (acc.hasScreenshot) listOf(acc.screenshotPath) else emptyList(),
-                                    )
-                                },
                                 onEnableAutofill = { enableAutofill() },
                                 contentPadding = PaddingValues(0.dp),
                             )
@@ -141,24 +142,50 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    private fun shareInfo(text: String, imagePaths: List<String>) {
-        val authority = "$packageName.fileprovider"
-        val uris = ArrayList<Uri>()
-        imagePaths.forEach { p ->
-            val f = java.io.File(p)
-            if (f.exists()) {
-                runCatching { androidx.core.content.FileProvider.getUriForFile(this, authority, f) }
+    /** Builds a profile card for [account] and copies the image to the clipboard. */
+    private fun copyCard(account: Account) {
+        Toast.makeText(this, "Building card…", Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            val file = ProfileCard.build(this@MainActivity, account)
+            if (file == null) { Toast.makeText(this@MainActivity, "Couldn't build card (check the account)", Toast.LENGTH_SHORT).show(); return@launch }
+            val uri = runCatching { androidx.core.content.FileProvider.getUriForFile(this@MainActivity, "$packageName.fileprovider", file) }.getOrNull()
+                ?: return@launch
+            grantUriPermission("com.discord", uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            val clip = ClipData.newUri(contentResolver, "Profile card", uri)
+            (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(clip)
+            Toast.makeText(this@MainActivity, "Card copied — paste it in Discord", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /** Builds profile card(s) and shares them (image + text) straight to Discord if installed. */
+    private fun shareToDiscord(accounts: List<Account>) {
+        if (accounts.isEmpty()) return
+        Toast.makeText(this, "Building ${accounts.size} card${if (accounts.size == 1) "" else "s"}…", Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            val authority = "$packageName.fileprovider"
+            val uris = ArrayList<Uri>()
+            for (acc in accounts) {
+                val file = ProfileCard.build(this@MainActivity, acc) ?: continue
+                runCatching { androidx.core.content.FileProvider.getUriForFile(this@MainActivity, authority, file) }
                     .getOrNull()?.let { uris.add(it) }
             }
-        }
-        val intent = when {
-            uris.isEmpty() -> Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }
-            else -> Intent(Intent.ACTION_SEND).apply {
-                type = "image/png"; putExtra(Intent.EXTRA_TEXT, text); putExtra(Intent.EXTRA_STREAM, uris[0])
+            if (uris.isEmpty()) { Toast.makeText(this@MainActivity, "Couldn't build cards", Toast.LENGTH_SHORT).show(); return@launch }
+            val text = accounts.joinToString("\n\n") { vm.accountInfoText(it) }
+            val send = if (uris.size == 1) {
+                Intent(Intent.ACTION_SEND).apply { type = "image/png"; putExtra(Intent.EXTRA_TEXT, text); putExtra(Intent.EXTRA_STREAM, uris[0]) }
+            } else {
+                Intent(Intent.ACTION_SEND_MULTIPLE).apply { type = "image/png"; putExtra(Intent.EXTRA_TEXT, text); putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris) }
+            }
+            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            val discordInstalled = packageManager.getLaunchIntentForPackage("com.discord") != null
+            try {
+                if (discordInstalled) { send.setPackage("com.discord"); startActivity(send) }
+                else startActivity(Intent.createChooser(send, "Share"))
+            } catch (e: Exception) {
+                send.setPackage(null)
+                startActivity(Intent.createChooser(send, "Share"))
             }
         }
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        startActivity(Intent.createChooser(intent, "Share account info"))
     }
 
     private fun enableAutofill() {

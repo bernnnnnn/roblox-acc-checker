@@ -6,6 +6,11 @@
 
     <queries>
         <package android:name="com.roblox.client" />
+        <package android:name="com.discord" />
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="image/png" />
+        </intent>
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />

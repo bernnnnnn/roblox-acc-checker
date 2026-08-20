@@ -97,11 +97,17 @@ class VaultViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Batch check across all accounts (cookie → full; else public by username). */
-    fun checkAll() {
+    fun checkAll() = checkMany(accounts.map { it.id }.toSet())
+
+    /** Batch check across a chosen set of accounts. */
+    fun checkSelected(ids: Set<String>) = checkMany(ids)
+
+    private fun checkMany(ids: Set<String>) {
         viewModelScope.launch {
             refreshingAll = true
-            for (account in accounts.toList()) {
-                checkOne(accounts.firstOrNull { it.id == account.id } ?: account)
+            for (id in ids) {
+                val account = accounts.firstOrNull { it.id == id } ?: continue
+                checkOne(account)
             }
             refreshingAll = false
         }

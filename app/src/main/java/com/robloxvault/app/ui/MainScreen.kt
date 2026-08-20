@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -26,9 +25,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Login
 import androidx.compose.material.icons.filled.Password
 import androidx.compose.material.icons.filled.Refresh
@@ -38,10 +39,11 @@ import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -49,14 +51,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -81,14 +84,18 @@ fun MainScreen(
     onCopy: (String, String) -> Unit,
     onCycleStatus: (String) -> Unit,
     onLoadStats: (Account) -> Unit,
-    onShare: (Account) -> Unit,
+    onCopyCard: (Account) -> Unit,
+    onShareDiscord: (List<Account>) -> Unit,
     onCheckAll: () -> Unit,
+    onCheckSelected: (Set<String>) -> Unit,
     checking: Boolean,
     onEnableAutofill: () -> Unit,
     contentPadding: PaddingValues,
 ) {
     var showAdd by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf<Account?>(null) }
+    var selectMode by remember { mutableStateOf(false) }
+    val selected = remember { mutableStateListOf<String>() }
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),
@@ -98,17 +105,18 @@ fun MainScreen(
         item {
             GradientHeader(
                 title = "Roblox Vault",
-                subtitle = "${accounts.size} account${if (accounts.size == 1) "" else "s"}",
+                subtitle = if (selectMode) "${selected.size} selected" else "${accounts.size} account${if (accounts.size == 1) "" else "s"}",
                 icon = Icons.Filled.Shield,
                 trailing = {
                     Row {
+                        HeaderCircle(Icons.Filled.Checklist, "Select") {
+                            selectMode = !selectMode; if (!selectMode) selected.clear()
+                        }
+                        Spacer(Modifier.width(8.dp))
                         Surface(color = NoctraAccent.copy(alpha = 0.16f), shape = CircleShape) {
                             IconButton(onClick = onCheckAll, enabled = !checking) {
-                                if (checking) {
-                                    CircularProgressIndicator(color = NoctraAccent, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
-                                } else {
-                                    Icon(Icons.Filled.Refresh, contentDescription = "Check all", tint = NoctraAccent)
-                                }
+                                if (checking) CircularProgressIndicator(color = NoctraAccent, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                                else Icon(Icons.Filled.Refresh, contentDescription = "Check all", tint = NoctraAccent)
                             }
                         }
                         Spacer(Modifier.width(8.dp))
@@ -130,10 +138,23 @@ fun MainScreen(
             )
         }
 
+        if (selectMode) {
+            item {
+                SelectionBar(
+                    count = selected.size,
+                    total = accounts.size,
+                    onAll = { selected.clear(); selected.addAll(accounts.map { it.id }) },
+                    onNone = { selected.clear() },
+                    onCheck = { onCheckSelected(selected.toSet()) },
+                    onShare = { onShareDiscord(accounts.filter { it.id in selected }) },
+                )
+            }
+        }
+
         if (accounts.isEmpty()) {
             item {
                 Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) {
-                    Text("No accounts.\nTap + to paste account:pass lines.", color = NoctraMuted)
+                    Text("No accounts.\nTap + to paste account:pass or cookies.", color = NoctraMuted)
                 }
             }
         } else {
@@ -141,13 +162,19 @@ fun MainScreen(
                 Box(Modifier.padding(horizontal = 14.dp)) {
                     AccountCard(
                         account = account,
+                        selectMode = selectMode,
+                        selected = account.id in selected,
+                        onToggleSelect = {
+                            if (account.id in selected) selected.remove(account.id) else selected.add(account.id)
+                        },
                         onLogin = { onLogin(account) },
                         onOpen = { onOpen(account) },
                         onOpenRoblox = onOpenRoblox,
                         onCopy = onCopy,
                         onCycleStatus = { onCycleStatus(account.id) },
                         onLoadStats = { onLoadStats(account) },
-                        onShare = { onShare(account) },
+                        onCopyCard = { onCopyCard(account) },
+                        onShareDiscord = { onShareDiscord(listOf(account)) },
                         onDelete = { confirmDelete = account },
                     )
                 }
@@ -155,14 +182,12 @@ fun MainScreen(
         }
     }
 
-    if (showAdd) {
-        AddDialog(onDismiss = { showAdd = false }, onImport = onImport, onAdd = onAdd)
-    }
+    if (showAdd) AddDialog(onDismiss = { showAdd = false }, onImport = onImport, onAdd = onAdd)
 
     confirmDelete?.let { acc ->
         AlertDialog(
             onDismissRequest = { confirmDelete = null },
-            title = { Text("Remove @${acc.username}?") },
+            title = { Text("Remove @${acc.username.ifBlank { "account" }}?") },
             text = { Text("This only deletes it locally.") },
             confirmButton = { TextButton(onClick = { onDelete(acc.id); confirmDelete = null }) { Text("Remove") } },
             dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text("Cancel") } },
@@ -171,9 +196,38 @@ fun MainScreen(
 }
 
 @Composable
-private fun HeaderCircle(icon: androidx.compose.ui.graphics.vector.ImageVector, desc: String, onClick: () -> Unit) {
+private fun HeaderCircle(icon: ImageVector, desc: String, onClick: () -> Unit) {
     Surface(color = NoctraAccent.copy(alpha = 0.16f), shape = CircleShape) {
         IconButton(onClick = onClick) { Icon(icon, contentDescription = desc, tint = NoctraAccent) }
+    }
+}
+
+@Composable
+private fun SelectionBar(
+    count: Int, total: Int,
+    onAll: () -> Unit, onNone: () -> Unit,
+    onCheck: () -> Unit, onShare: () -> Unit,
+) {
+    Surface(
+        color = NoctraSurfaceHi,
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
+    ) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = if (count == total && total > 0) onNone else onAll) {
+                Text(if (count == total && total > 0) "None" else "All")
+            }
+            Spacer(Modifier.weight(1f))
+            OutlinedButton(onClick = onCheck, enabled = count > 0) {
+                Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp)); Text("Check")
+            }
+            Spacer(Modifier.width(8.dp))
+            FilledTonalButton(onClick = onShare, enabled = count > 0) {
+                Icon(Icons.Filled.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp)); Text("Discord")
+            }
+        }
     }
 }
 
@@ -181,13 +235,17 @@ private fun HeaderCircle(icon: androidx.compose.ui.graphics.vector.ImageVector, 
 @Composable
 private fun AccountCard(
     account: Account,
+    selectMode: Boolean,
+    selected: Boolean,
+    onToggleSelect: () -> Unit,
     onLogin: () -> Unit,
     onOpen: () -> Unit,
     onOpenRoblox: () -> Unit,
     onCopy: (String, String) -> Unit,
     onCycleStatus: () -> Unit,
     onLoadStats: () -> Unit,
-    onShare: () -> Unit,
+    onCopyCard: () -> Unit,
+    onShareDiscord: () -> Unit,
     onDelete: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -201,15 +259,15 @@ private fun AccountCard(
     ) {
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                if (selectMode) {
+                    Checkbox(checked = selected, onCheckedChange = { onToggleSelect() })
+                    Spacer(Modifier.width(4.dp))
+                }
                 Avatar(name)
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text("@$name", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = NoctraTextHi)
-                    if (account.note.isNotBlank()) {
-                        Text(account.note, fontSize = 12.sp, color = NoctraMuted)
-                    } else if (account.hasSession && account.username.isBlank()) {
-                        Text("cookie — tap Check for name", fontSize = 12.sp, color = NoctraMuted)
-                    }
+                    if (account.note.isNotBlank()) Text(account.note, fontSize = 12.sp, color = NoctraMuted)
                 }
                 StatusChip(account.status, onCycleStatus)
             }
@@ -223,12 +281,8 @@ private fun AccountCard(
                     PrimaryChip(Icons.Filled.Login, "Login", onLogin)
                 }
                 GhostChip(Icons.Filled.SportsEsports, "Roblox app", onOpenRoblox)
-                if (account.username.isNotBlank()) {
-                    GhostChip(Icons.Filled.ContentCopy, "User") { onCopy(account.username, "Username") }
-                }
-                if (account.password.isNotEmpty()) {
-                    GhostChip(Icons.Filled.ContentCopy, "Pass") { onCopy(account.password, "Password") }
-                }
+                if (account.username.isNotBlank()) GhostChip(Icons.Filled.ContentCopy, "User") { onCopy(account.username, "Username") }
+                if (account.password.isNotEmpty()) GhostChip(Icons.Filled.ContentCopy, "Pass") { onCopy(account.password, "Password") }
                 GhostChip(Icons.Filled.ExpandMore, if (expanded) "Hide" else "Stats") { expanded = !expanded }
             }
 
@@ -236,8 +290,7 @@ private fun AccountCard(
                 Column {
                     Spacer(Modifier.height(12.dp))
                     if (account.hasScreenshot) {
-                        ScreenshotThumb(account.screenshotPath)
-                        Spacer(Modifier.height(10.dp))
+                        ScreenshotThumb(account.screenshotPath); Spacer(Modifier.height(10.dp))
                     }
                     if (account.hasInfo) {
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -250,25 +303,16 @@ private fun AccountCard(
                         }
                         Spacer(Modifier.height(10.dp))
                     } else if (account.infoError.isNotBlank()) {
-                        Text(account.infoError, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
-                        Spacer(Modifier.height(8.dp))
+                        Text(account.infoError, color = StatusBad, fontSize = 12.sp); Spacer(Modifier.height(8.dp))
                     } else {
-                        Text("Log in once, then load stats.", color = NoctraMuted, fontSize = 12.sp)
-                        Spacer(Modifier.height(8.dp))
+                        Text("Tap Check to load stats.", color = NoctraMuted, fontSize = 12.sp); Spacer(Modifier.height(8.dp))
                     }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = onLoadStats, modifier = Modifier.weight(1f)) {
-                            Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp)); Text(if (account.hasInfo) "Refresh" else "Load")
-                        }
-                        OutlinedButton(onClick = onShare, modifier = Modifier.weight(1f)) {
-                            Icon(Icons.Filled.Share, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp)); Text("Share")
-                        }
-                        IconButton(onClick = onDelete) {
-                            Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
-                        }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        GhostChip(Icons.Filled.Refresh, "Check") { onLoadStats() }
+                        GhostChip(Icons.Filled.Image, "Copy card", onCopyCard)
+                        PrimaryChip(Icons.Filled.Share, "Discord", onShareDiscord)
+                        GhostChip(Icons.Filled.Delete, "Delete", onDelete)
                     }
                 }
             }
@@ -297,17 +341,13 @@ private fun StatusChip(status: CheckStatus, onClick: () -> Unit) {
         CheckStatus.ERROR -> "Error" to NoctraMuted
         CheckStatus.UNKNOWN -> "Unchecked" to NoctraMuted
     }
-    Surface(
-        color = color.copy(alpha = 0.16f),
-        shape = RoundedCornerShape(50),
-        onClick = onClick,
-    ) {
+    Surface(color = color.copy(alpha = 0.16f), shape = RoundedCornerShape(50), onClick = onClick) {
         Text(label, color = color, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp))
     }
 }
 
 @Composable
-private fun PrimaryChip(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
+private fun PrimaryChip(icon: ImageVector, label: String, onClick: () -> Unit) {
     Surface(color = NoctraAccent, shape = RoundedCornerShape(50), onClick = onClick) {
         Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, contentDescription = null, tint = NoctraBlack, modifier = Modifier.size(16.dp))
@@ -318,7 +358,7 @@ private fun PrimaryChip(icon: androidx.compose.ui.graphics.vector.ImageVector, l
 }
 
 @Composable
-private fun GhostChip(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
+private fun GhostChip(icon: ImageVector, label: String, onClick: () -> Unit) {
     Surface(color = NoctraSurfaceHi, shape = RoundedCornerShape(50), onClick = onClick) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, contentDescription = null, tint = NoctraText, modifier = Modifier.size(16.dp))
@@ -341,10 +381,7 @@ private fun ScreenshotThumb(path: String) {
             bitmap = image,
             contentDescription = "Logged-in screenshot",
             contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 180.dp)
-                .background(NoctraSurfaceHi, RoundedCornerShape(12.dp)),
+            modifier = Modifier.fillMaxWidth().heightIn(max = 180.dp).background(NoctraSurfaceHi, RoundedCornerShape(12.dp)),
         )
     }
 }
@@ -383,9 +420,7 @@ private fun AddDialog(
                     modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
                 )
                 OutlinedTextField(note, { note = it }, label = { Text("Note (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
-                if (message.isNotEmpty()) {
-                    Spacer(Modifier.height(8.dp)); Text(message, color = NoctraAccent, fontSize = 13.sp)
-                }
+                if (message.isNotEmpty()) { Spacer(Modifier.height(8.dp)); Text(message, color = NoctraAccent, fontSize = 13.sp) }
             }
         },
         confirmButton = {

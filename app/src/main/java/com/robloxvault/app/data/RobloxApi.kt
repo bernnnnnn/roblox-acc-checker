@@ -78,6 +78,33 @@ object RobloxApi {
         PublicInfo(userId, name, displayName, createdIso, banned, friends, followers, rap, items, inventoryPrivate = !canView)
     }
 
+    /** Public avatar (full body) PNG url for a user. */
+    fun fetchAvatarUrl(userId: Long): String? = try {
+        val json = getPublic("https://thumbnails.roblox.com/v1/users/avatar?userIds=$userId&size=420x420&format=Png&isCircular=false")
+        JSONObject(json).optJSONArray("data")?.getJSONObject(0)?.optString("imageUrl")?.takeIf { it.startsWith("http") }
+    } catch (e: Exception) {
+        null
+    }
+
+    /** Resolves a username to its userId (public); exposed for card building. */
+    fun userIdForUsername(username: String): Long? = resolveUserId(username)
+
+    /** Downloads raw bytes from a public URL (e.g. an avatar PNG). */
+    fun downloadBytes(urlStr: String): ByteArray? {
+        val conn = (URL(urlStr).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 15000
+            readTimeout = 15000
+        }
+        return try {
+            if (conn.responseCode in 200..299) conn.inputStream.use { it.readBytes() } else null
+        } catch (e: Exception) {
+            null
+        } finally {
+            conn.disconnect()
+        }
+    }
+
     /** Resolves a username to its userId via the public usernames endpoint. */
     private fun resolveUserId(username: String): Long? = try {
         val body = JSONObject().apply {
