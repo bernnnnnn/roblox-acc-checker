@@ -35,9 +35,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.robloxvault.app.data.Account
-import com.robloxvault.app.data.CheckStatus
 import com.robloxvault.app.login.LoginActivity
 import com.robloxvault.app.security.LockManager
 import com.robloxvault.app.ui.LockScreen
@@ -75,8 +73,8 @@ class MainActivity : FragmentActivity() {
                             val id = data?.getStringExtra(LoginActivity.EXTRA_ACCOUNT_ID)
                             val cookie = data?.getStringExtra(LoginActivity.EXTRA_COOKIE).orEmpty()
                             val shot = data?.getStringExtra(LoginActivity.EXTRA_SHOT).orEmpty()
-                            val result = data.getStringExtra(LoginActivity.EXTRA_RESULT)
-                            if (id != null && result != null) vm.recordLogin(id, result, cookie, shot)
+                            val outcome = data?.getStringExtra(LoginActivity.EXTRA_RESULT)
+                            if (id != null && outcome != null) vm.recordLogin(id, outcome, cookie, shot)
                         }
 
                         if (!unlocked) {
