@@ -10,6 +10,7 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
 import com.robloxvault.app.data.Account
+import com.robloxvault.app.data.CheckStatus
 import com.robloxvault.app.data.RobloxApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -69,30 +70,53 @@ object ProfileCard {
 
         // Text column.
         val tx = 470f
+        val maxW = w - tx - 40f
+
+        // Username — shrink to fit the full name (no truncation).
         p.typeface = Typeface.DEFAULT_BOLD
         p.color = Color.parseColor("#FFFFFF")
-        p.textSize = 62f
-        c.drawText(ellipsize("@$name", p, w - tx - 40f), tx, 175f, p)
+        var us = 66f
+        p.textSize = us
+        while (p.measureText("@$name") > maxW && us > 26f) { us -= 2f; p.textSize = us }
+        c.drawText("@$name", tx, 155f, p)
 
         p.typeface = Typeface.DEFAULT
+        var y = 215f
         if (account.displayName.isNotBlank() && !account.displayName.equals(name, true)) {
             p.color = Color.parseColor("#7A8796")
-            p.textSize = 38f
-            c.drawText(ellipsize(account.displayName, p, w - tx - 40f), tx, 230f, p)
+            p.textSize = 36f
+            c.drawText(ellipsize(account.displayName, p, maxW), tx, y, p)
+            y += 55f
         }
 
-        p.textSize = 44f
-        var y = 320f
         p.color = Color.parseColor("#D8E8FF")
+        p.textSize = 42f
         c.drawText("Created: ${account.createdIso.substringBefore('T').ifBlank { "—" }}", tx, y, p)
-        y += 62f
-        if (account.robux >= 0) { c.drawText("Robux: ${"%,d".format(account.robux)}", tx, y, p); y += 62f }
-        if (account.rap >= 0) { c.drawText("RAP: ${"%,d".format(account.rap)}", tx, y, p); y += 62f }
+        y += 58f
+        if (account.robux >= 0) { c.drawText("Robux: ${"%,d".format(account.robux)}", tx, y, p); y += 58f }
+
+        // HIT line (replaces RAP) — green when the password worked.
+        val locked = account.status == CheckStatus.NEEDS_VERIFICATION
+        p.typeface = Typeface.DEFAULT_BOLD
+        p.textSize = 50f
+        p.color = if (account.passwordWorked) Color.parseColor("#3BA55D") else Color.parseColor("#7A8796")
+        c.drawText("HIT ~ flyingroach33", tx, y, p)
+        y += 50f
+
+        p.typeface = Typeface.DEFAULT
+        p.textSize = 32f
+        p.color = Color.parseColor("#7A8796")
+        val pw = when {
+            account.passwordWorked && locked -> "Password works · account locked"
+            account.passwordWorked -> "Password works"
+            else -> "Password unverified"
+        }
+        c.drawText(pw, tx, y, p)
 
         // Footer.
         p.color = Color.parseColor("#515667")
-        p.textSize = 30f
-        c.drawText("Roblox Vault", tx, h - 40f, p)
+        p.textSize = 28f
+        c.drawText("Roblox Vault", tx, h - 34f, p)
 
         val dir = File(context.filesDir, "cards").apply { mkdirs() }
         val file = File(dir, "${account.id}.png")

@@ -336,7 +336,7 @@ private fun Avatar(username: String) {
 private fun StatusChip(status: CheckStatus, onClick: () -> Unit) {
     val (label, color) = when (status) {
         CheckStatus.VALID -> "Working" to StatusGood
-        CheckStatus.NEEDS_VERIFICATION -> "Locked" to StatusWarn
+        CheckStatus.NEEDS_VERIFICATION -> "HIT · locked" to StatusWarn
         CheckStatus.INVALID -> "Dead" to StatusBad
         CheckStatus.ERROR -> "Error" to NoctraMuted
         CheckStatus.UNKNOWN -> "Unchecked" to NoctraMuted

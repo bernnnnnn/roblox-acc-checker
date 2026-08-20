@@ -48,6 +48,7 @@ class AccountStore(context: Context) {
         put("status", a.status.name)
         put("note", a.note)
         put("lastCheckedEpoch", a.lastCheckedEpoch)
+        put("passwordWorked", a.passwordWorked)
         put("roblosecurity", a.roblosecurity)
         put("userId", a.userId)
         put("displayName", a.displayName)
@@ -72,6 +73,7 @@ class AccountStore(context: Context) {
             .getOrDefault(CheckStatus.UNKNOWN),
         note = o.optString("note"),
         lastCheckedEpoch = o.optLong("lastCheckedEpoch", 0L),
+        passwordWorked = o.optBoolean("passwordWorked", false),
         roblosecurity = o.optString("roblosecurity"),
         userId = o.optLong("userId", 0L),
         displayName = o.optString("displayName"),

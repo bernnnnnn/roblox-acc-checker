@@ -75,13 +75,8 @@ class MainActivity : FragmentActivity() {
                             val id = data?.getStringExtra(LoginActivity.EXTRA_ACCOUNT_ID)
                             val cookie = data?.getStringExtra(LoginActivity.EXTRA_COOKIE).orEmpty()
                             val shot = data?.getStringExtra(LoginActivity.EXTRA_SHOT).orEmpty()
-                            if (id != null) {
-                                when (data.getStringExtra(LoginActivity.EXTRA_RESULT)) {
-                                    LoginActivity.RESULT_VALID -> vm.recordCheck(id, CheckStatus.VALID, cookie, shot)
-                                    LoginActivity.RESULT_INVALID -> vm.recordCheck(id, CheckStatus.INVALID, "", "")
-                                    else -> Unit
-                                }
-                            }
+                            val result = data.getStringExtra(LoginActivity.EXTRA_RESULT)
+                            if (id != null && result != null) vm.recordLogin(id, result, cookie, shot)
                         }
 
                         if (!unlocked) {

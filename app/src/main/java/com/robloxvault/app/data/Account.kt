@@ -19,6 +19,10 @@ data class Account(
     val note: String = "",
     val lastCheckedEpoch: Long = 0L,
 
+    // True once the credentials were accepted (full login OR reached the
+    // account-lock page — both prove the password is correct).
+    val passwordWorked: Boolean = false,
+
     // Captured after a successful login; used to read this account's own data.
     val roblosecurity: String = "",
 

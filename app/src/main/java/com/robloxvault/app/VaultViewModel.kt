@@ -76,18 +76,30 @@ class VaultViewModel(app: Application) : AndroidViewModel(app) {
         it.copy(status = next)
     }
 
-    /** Records the outcome of a login check, storing the session + screenshot on success. */
-    fun recordCheck(id: String, status: CheckStatus, cookie: String, shotPath: String) {
-        update(id) {
-            it.copy(
-                status = status,
-                lastCheckedEpoch = System.currentTimeMillis(),
-                roblosecurity = if (status == CheckStatus.VALID && cookie.isNotBlank()) cookie else it.roblosecurity,
-                screenshotPath = if (status == CheckStatus.VALID && shotPath.isNotBlank()) shotPath else it.screenshotPath,
-            )
+    /**
+     * Records a login attempt. "valid" = full session; "locked" = correct
+     * password but the account is locked (still a HIT); "invalid" = wrong
+     * password. Reaching the lock page proves the password, so both valid and
+     * locked set passwordWorked = true.
+     */
+    fun recordLogin(id: String, result: String, cookie: String, shotPath: String) {
+        when (result) {
+            "valid", "locked" -> {
+                update(id) {
+                    it.copy(
+                        status = if (result == "valid") CheckStatus.VALID else CheckStatus.NEEDS_VERIFICATION,
+                        passwordWorked = true,
+                        roblosecurity = if (cookie.isNotBlank()) cookie else it.roblosecurity,
+                        screenshotPath = if (shotPath.isNotBlank()) shotPath else it.screenshotPath,
+                        lastCheckedEpoch = System.currentTimeMillis(),
+                    )
+                }
+                refreshInfo(id)
+            }
+            "invalid" -> update(id) {
+                it.copy(status = CheckStatus.INVALID, passwordWorked = false, lastCheckedEpoch = System.currentTimeMillis())
+            }
         }
-        // Auto-pull info right after a successful login.
-        if (status == CheckStatus.VALID && cookie.isNotBlank()) refreshInfo(id)
     }
 
     /** Checks one account: full info via cookie if present, else public info by username. */
@@ -139,7 +151,10 @@ class VaultViewModel(app: Application) : AndroidViewModel(app) {
                 } else {
                     applyPublic(account.id, pub)
                     if (deadSession) update(account.id) {
-                        it.copy(status = CheckStatus.INVALID, infoError = "Login dead — public data only")
+                        if (it.passwordWorked)
+                            it.copy(status = CheckStatus.NEEDS_VERIFICATION, infoError = "Locked — public data only (Robux needs unlock)")
+                        else
+                            it.copy(status = CheckStatus.INVALID, infoError = "Login dead — public data only")
                     }
                 }
             }
